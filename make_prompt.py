@@ -2,7 +2,7 @@
 # Distractor (dens)ity: {0: low, 1: medium, 2: high}
 # Interference (type): {0: nonsensical, 1: thematic, 2: paraphrased}
 # (Pos)ition: {0: beginning, 1: middle, 2: end}
-# The ques(tion) variable is a number from [0, 80] of the question number.
+# The (ques)tion variable is a number from [0, 80] of the question number.
 
 # Returns the full prompt
 def make_prompt(dens, type, pos, ques):
