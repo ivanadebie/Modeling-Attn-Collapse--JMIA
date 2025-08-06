@@ -2,10 +2,9 @@
 # Distractor (dens)ity: {0: low, 1: medium, 2: high}
 # Interference (type): {0: nonsensical, 1: thematic, 2: paraphrased}
 # (Pos)ition: {0: beginning, 1: middle, 2: end}
-# The (ques)tion variable is a number from [0, 80] of the question number.
-
-# Returns the full prompt
-def make_prompt(dens, type, pos, ques):
+# The ques(tion) variable is a number from [0, 80] of the question number.
+# Returns the documents
+def make_documents(dens, type, pos, ques):
     question = questions[ques]
     sizes = [2, 6, 10]
     response = None
@@ -29,6 +28,13 @@ def make_prompt(dens, type, pos, ques):
         )
     documents = response.output_text.split("$$")
     documents = [ans.strip() for ans in documents]
+    return documents
+
+# Same variables as make_documents
+# Returns the full prompt
+def make_prompt(dens, type, pos, ques):
+    documents = make_documents(dens, type, pos, ques)
+    sizes = [2, 6, 10]
     if pos == 0:
         documents.insert(0, answers[ques])
     if pos == 1:
@@ -36,7 +42,7 @@ def make_prompt(dens, type, pos, ques):
     if pos == 2:
         documents.append(answers[ques])
     prompt = "Answer the question using the documents below: \n\n"
-    prompt += "Question: " + question + "?"
+    prompt += "Question: " + questions[ques] + "?"
     for i in range(len(documents)):
         prompt += "\n\nDocument [" + str((i + 1)) + "]\n" + documents[i]
     return prompt
