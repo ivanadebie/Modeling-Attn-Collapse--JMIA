@@ -1,0 +1,41 @@
+##We need:
+A way to count tokens (how many tokens each doc takes).
+A way to calculate ratio = distractor tokens ÷ total tokens.
+
+from transformers import AutoTokenizer
+tok = AutoTokenizer.from_pretrained("gpt2")  # or longchat tokenizer
+
+def count_tokens(text):
+    return len(tok.encode(text))
+
+
+##Now, to calculate the ratio for a given ctxs list:
+
+def distractor_ratio(ctxs, gold_idx):
+    total = sum(count_tokens(d["title"] + "\n" + d["text"]) for d in ctxs)
+    distractor = sum(count_tokens(d["title"] + "\n" + d["text"])
+                     for i, d in enumerate(ctxs) if i != gold_idx)
+    return distractor / max(total, 1)
+
+##Once we have the ratio, we can bucket it:
+
+def bucket_density(ratio):
+    if ratio < 0.25:
+        return "low"
+    elif ratio < 0.60:
+        return "medium"
+    else:
+        return "high"
+
+
+Inside the loop where we already have ctxs, we can add this:
+
+gold_idx = 2  # for example
+pos = classify_evidence_position(gold_idx, len(ctxs))
+ratio = distractor_ratio(ctxs, gold_idx)
+density = bucket_density(ratio)
+
+data["gold_index"] = gold_idx
+data["evidence_position"] = pos
+data["distractor_ratio"] = ratio
+data["distractor_density"] = density
