@@ -10,5 +10,12 @@ def classify_evidence_position(gold_idx, n_docs):
         return "end"
 
 
+
 gold_idx → position of gold doc (starts from 0)
 n_docs → total docs in ctxs
+
+
+Example: 
+pos = classify_evidence_position(0, 4)  # → "beginning"
+pos = classify_evidence_position(2, 4)  # → "end"
+
