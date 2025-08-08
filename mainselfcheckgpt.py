@@ -4,29 +4,29 @@ from tqdm import tqdm
 from dataclasses import asdict
 
 import llm_apihandler
-from metrics import HallucinationScorer
+from metrics_selfcheck import HallucinationScorer, QARecord
 
 INPUT_DATA_PATH = 'Synthetic QA.xlsx'   
 OUTPUT_DATA_PATH = 'results_nli_labeled.csv' 
-MODEL_TO_USE = "meta-llama/llama-3-8b-instruct" 
+MODEL_TO_USE = "mistralai/mistral-7b-instruct" 
 
 def main():
 
-    # --- Part 1: Load data from Excel and create initial records ---
+    # --- Part 1: Load data from JSONL and create initial records ---
     print("--- Starting Part 1: Loading Data ---")
-    df_input = pd.read_excel(INPUT_DATA_PATH)
-    
+    import json
+    INPUT_DATA_PATH = 'nq-open-oracle-mpt-30b-clean_synthetic-predictions.jsonl'
     records = []
-    for _, row in df_input.iterrows():
-        # Excel columns are named 'full_context' and 'question'
-        full_prompt = row['full_context'] + "\n\nQuestion: " + row['question']
-        record = Synthetic QA(
-            qa_id=row['qa_id'],
-            context=row['full_context'],
-            prompt=full_prompt
-        )
-        records.append(record)
-    
+    with open(INPUT_DATA_PATH, "r", encoding="utf-8") as f:
+        for line in f:
+            item = json.loads(line)
+            # Use 'id', 'prompt', and optionally 'context' if present
+            record = QARecord(
+                qa_id=item.get('id', ''),
+                context=item.get('prompt', ''),  # If you want to use a separate context field, adjust here
+                prompt=item.get('prompt', '')
+            )
+            records.append(record)
     print(f"{len(records)} records created.")
 
     # --- Part 2: Get Initial Answers from the LLM ---
