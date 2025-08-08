@@ -1,0 +1,8 @@
+def classify_evidence_position(gold_idx, n_docs):
+    pct = (gold_idx + 1) / n_docs
+    if pct <= 0.33:
+        return "beginning"
+    elif pct <= 0.66:
+        return "middle"
+    else:
+        return "end"
