@@ -1,0 +1,30 @@
+#mpt
+python -u ./scripts/get_qa_responses_from_mpt.py \
+    --input-path qa_data/nq-open-oracle.jsonl.gz \
+    --num-gpus 1 \
+    --max-new-tokens 100 \
+    --batch-size 1 \
+    --max-memory-per-gpu 80 \
+    --num-gpus 1 \
+    --model mosaicml/mpt-30b-instruct \
+    --output-path qa_predictions/nq-open-oracle-mpt-30b-instruct-predictions.jsonl.gz
+
+#longchat
+python -u ./scripts/get_qa_responses_from_longchat.py \
+    --input-path qa_data/fixed_synthetic_prompts.jsonl.gz \
+    --num-gpus 2 \
+    --max-new-tokens 100 \
+    --batch-size 8 \
+    --max-memory-per-gpu 45 \
+    --num-gpus 2 \
+    --model lmsys/longchat-13b-16k \
+    --output-path qa_predictions/1-longchat-13b-16k-predictions.jsonl.gz
+
+#llama2
+
+python -u ./scripts/get_qa_responses_from_llama_2.py \
+    --input-path qa_data/nq-open-oracle.jsonl.gz \
+    --max-new-tokens 100 \
+    --num-gpus 2 \
+    --model meta-llama/Llama-2-70b-chat-hf \
+    --output-path qa_predictions/nq-open-oracle-llama-2-70b-chat-hf-predictions.jsonl.gz

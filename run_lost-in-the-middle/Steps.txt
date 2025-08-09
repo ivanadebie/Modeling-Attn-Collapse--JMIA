@@ -1,0 +1,13 @@
+conda install -c anaconda cmake
+apt-get update && apt-get install zlib1g-dev
+pip install -e .
+pip install vllm==0.4.0 xformers==0.0.23.post1
+pip install --upgrade accelerate
+pip install --upgrade transformers
+pip install --upgrade "fschat[model_worker,web-server]"
+pip install accelerate transformers
+pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+python -c "import torch; print(torch.__version__)"
+pip install transformers==4.38.0
+python re-encode.py
+python -u ./scripts/get_qa_responses_from_longchat.py --input-path qa_data/fixed_synthetic_prompts.jsonl.gz --num-gpus 2 --max-new-tokens 100 --batch-size 8 --max-memory-per-gpu 45 --model lmsys/longchat-13b-16k --output-path qa_predictions/1-longchat-13b-16k-predictions.jsonl.gz
