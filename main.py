@@ -40,3 +40,6 @@ def fillTable(numQues):
 
     data = pd.DataFrame(export)
     data.to_excel("Distractors.xlsx")
+
+# Calls the function
+fillTable(81)
