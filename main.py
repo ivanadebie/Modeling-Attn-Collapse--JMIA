@@ -42,4 +42,5 @@ def fillTable(numQues):
     data.to_excel("Distractors.xlsx")
 
 # Calls the function
-fillTable(81)
+if __name__ == "__main__":
+    fillTable(81)
