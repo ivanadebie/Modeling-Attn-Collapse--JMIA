@@ -1,0 +1,13 @@
+LICENSE
+README.md
+pyproject.toml
+setup.py
+src/lost_in_the_middle/__init__.py
+src/lost_in_the_middle/metrics.py
+src/lost_in_the_middle/prompting.py
+src/modeling_attn_collapse.egg-info/PKG-INFO
+src/modeling_attn_collapse.egg-info/SOURCES.txt
+src/modeling_attn_collapse.egg-info/dependency_links.txt
+src/modeling_attn_collapse.egg-info/requires.txt
+src/modeling_attn_collapse.egg-info/top_level.txt
+tests/test_prompting.py

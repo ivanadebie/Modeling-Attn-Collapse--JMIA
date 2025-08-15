@@ -1,0 +1,48 @@
+Metadata-Version: 2.4
+Name: modeling_attn_collapse
+Version: 0.1.0
+Summary: Repository for modeling attention collapse and hallucination risk in long-context LLMs.
+Home-page: https://github.com/ivanadebie/Modeling-Attn-Collapse--JMIA
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: tqdm
+Requires-Dist: xopen
+Requires-Dist: pydantic
+Requires-Dist: pytest
+Requires-Dist: longchat@ git+https://github.com/DachengLi1/LongChat.git@43d71f03d7711a2ab3b78ee8d1e38b65bb7fd22f
+Requires-Dist: transformers==4.39.1
+Requires-Dist: torch
+Requires-Dist: torchvision
+Requires-Dist: torchaudio
+Requires-Dist: einops
+Requires-Dist: flash-attn==1.0.5
+Requires-Dist: triton-pre-mlir@ git+https://github.com/vchiley/triton.git@triton_pre_mlir#subdirectory=python
+Requires-Dist: accelerate
+Requires-Dist: vllm==0.4.0
+Requires-Dist: xformers==0.0.23.post1
+Requires-Dist: fschat[model_worker,web-server]
+Requires-Dist: flake8==5.0.4
+Requires-Dist: black==22.10.0
+Requires-Dist: pre-commit
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Example
+python -u ./scripts/get_qa_responses_from_longchat.py \ 
+ --input-path workspace/Modeling-Attn-Collapse--JMIA/litm_repo_with_changes/qa_data/synthetic_qa.jsonl.gz \
+ --num-gpus 4 \
+ --max-new-tokens 200\ 
+ --batch-size 8 \
+ --max-memory-per-gpu 24 \
+ --closedbook \
+ --model lmsys/longchat-13b-16k \
+ --output-path workspace/Modeling-Attn-Collapse--JMIA/litm_repo_with_changes/qa_predictions/synthetic_qa_predictions.jsonl.gz

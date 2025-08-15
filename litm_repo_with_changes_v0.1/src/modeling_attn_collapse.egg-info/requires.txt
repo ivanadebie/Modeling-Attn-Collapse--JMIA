@@ -1,0 +1,19 @@
+tqdm
+xopen
+pydantic
+pytest
+longchat@ git+https://github.com/DachengLi1/LongChat.git@43d71f03d7711a2ab3b78ee8d1e38b65bb7fd22f
+transformers==4.39.1
+torch
+torchvision
+torchaudio
+einops
+flash-attn==1.0.5
+triton-pre-mlir@ git+https://github.com/vchiley/triton.git@triton_pre_mlir#subdirectory=python
+accelerate
+vllm==0.4.0
+xformers==0.0.23.post1
+fschat[model_worker,web-server]
+flake8==5.0.4
+black==22.10.0
+pre-commit
