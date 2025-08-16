@@ -45,19 +45,6 @@ def bucket_density(ratio: float) -> str:
     else:
         return "high"
 
-def interference_ratio_from_response(response: str, ctxs: Iterable[dict], gold_idx: int) -> Tuple[int, int, float]:
-    if not response:
-        return 0, 0, 0.0
-    distractor_text = " ".join(
-        (d.get("title") or "") + " " + (d.get("text") or "")
-        for i, d in enumerate(ctxs) if i != gold_idx
-    )
-    resp_tokens = tokenize_words(response)
-    dist_tokens = set(tokenize_words(distractor_text))
-    hits = sum(1 for t in resp_tokens if t in dist_tokens)
-    n = len(resp_tokens)
-    return hits, n, (hits / n if n > 0 else 0.0)
-
 def _open_in(path: str):
     return gzip.open(path, "rt", encoding="utf-8") if path.endswith(".gz") else open(path, "r", encoding="utf-8")
 
