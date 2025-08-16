@@ -4,57 +4,35 @@ from dataclasses import asdict
 import numpy as np
 
 import llm_apihandler
-from metrics_selfcheck import HallucinationScorer, QARecord, confidence_to_binary, aggregate_confidence_scores, aggregate_binary_scores
+from data_requirements import QARecord, deduplicate_samples 
+from metrics_selfcheck import HallucinationScorer
+from data_utils import save_results_to_csv, save_diagnostics_to_csv
 
 INPUT_DATA_PATH = '81QA-longchat-13b-16k-predictions.jsonl'   
 OUTPUT_DATA_PATH = 'results_nli_labeled.csv' 
 DIAGNOSTICS_OUTPUT_PATH = 'results_diagnostics.csv'
 MODEL_TO_USE = "openai/gpt-3.5-turbo" 
 
-def save_results_to_csv(records, output_path):
-    """Helper function to convert records and save to CSV"""
-    results_data = [asdict(record) for record in records]
-    
-    # Add aggregated numeric columns and convert dictionaries to strings
-    for item in results_data:
-        # Remove fields that are not populated by this script
-        item.pop('per_sample_scores', None)
-        item.pop('risk_score_mean', None)
-        item.pop('risk_score_p95', None)
-        item.pop('self_consistency_vote', None)
-
-        # Convert dictionaries to strings for CSV compatibility
-        item['confidence'] = str(item['confidence'])
-        item['binary_confidence'] = str(item['binary_confidence'])
-        item['nli_probabilities'] = str(item['nli_probabilities']) # Also convert this new field
-
-    df_output = pd.DataFrame(results_data)
-    df_output.to_csv(output_path, index=False)
-
-def save_diagnostics_to_csv(records, output_path):
-    """Saves per-item diagnostics to a separate CSV file."""
-    diagnostics_data = []
-    for record in records:
-        conf_dict = record.confidence if record.confidence else {}
-        bin_dict = record.binary_confidence if record.binary_confidence else {}
-        
-        diag_item = {'qa_id': record.qa_id}
-        if conf_dict:
-            scores = list(conf_dict.values())
-            diag_item['n_sentences'] = len(scores)
-            diag_item['std_conf'] = np.std(scores) if len(scores) > 1 else 0.0
-            diag_item['pos_rate'] = np.mean(list(bin_dict.values())) if bin_dict else 0.0
-        else:
-            diag_item['n_sentences'] = 0
-            diag_item['std_conf'] = 0.0
-            diag_item['pos_rate'] = 0.0
-        diagnostics_data.append(diag_item)
-        
-    df_diagnostics = pd.DataFrame(diagnostics_data)
-    df_diagnostics.to_csv(output_path, index=False)
 
 def main():
     # Load data from JSONL and create initial records
+
+
+    # loading_data()
+    # ...
+    ...
+    # ...
+
+    # # evaluating scores()
+    # ....
+
+    # # saving results()
+    # ...
+
+
+
+
+    # 1. Load data from JSONL and create initial records
     import json
     records = []
     full_model_prompts = []  # Store prompts separately to avoid re-reading file
@@ -94,25 +72,43 @@ def main():
         full_model_prompt = full_model_prompts[i]
         
         # Pass a seed for reproducible sample generation (i is a simple choice)
-        score_results = scorer.score_answer(record.answer, full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
+        sentence_level_hallu_scores = scorer.get_sentence_level_hallucination_scores(record.answer, full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
+        sample_level_hallu_scores = scorer.get_sample_level_hallucination_scores(full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
         
-        if score_results:
-            record.confidence = score_results.get('hallucination_scores', {})
-            # NLI probabilities are no longer returned, so we leave the field empty
-            record.nli_probabilities = {}
-        else:
-            record.confidence = {}
-            record.nli_probabilities = {}
+        whole_answer_hallu_score = scorer.aggregate_confidence_scores(sample_level_hallu_scores)
+        whole_answer_hallu_label = scorer.confidence_to_binary(whole_answer_hallu_score['conf_agg_mean'], threshold=0.85) #1-hallu / 0-not hallu
+
+        model_response_uncertainty = scorer.aggregate_confidence_scores(sample_level_hallu_scores)['conf_agg_mean']
+        
+        sample_level_95th_percentile = scorer.calculate_95th_percentile(
+            sample_level_hallu_scores.get('sample_level_hallucination_scores', [])
+        )
+
+        record.hallucination_label = whole_answer_hallu_label
+        record.hallucination_score = whole_answer_hallu_score
+        record.model_response_uncertainty = model_response_uncertainty
+        record.confidence = 1 - model_response_uncertainty
+        record.sentence_level_hallu_scores = sentence_level_hallu_scores['sentence_level_hallucination_scores']
+        record.sample_level_hallu_scores = sample_level_hallu_scores['sample_level_hallucination_scores']
+        record.sample_level_95th_percentile = sample_level_95th_percentile
+
+        # if sentence_level_hallu_scores:
+        #     record.confidence = sentence_level_hallu_scores.get('sentence_level_hallucination_scores', {})
+        #     # NLI probabilities are no longer returned, so we leave the field empty
+        #     record.nli_probabilities = {}
+        # else:
+        #     record.confidence = {}
+        #     record.nli_probabilities = {}
             
-        record.binary_confidence = confidence_to_binary(record.confidence, threshold=0.85)
+        # record.binary_confidence = confidence_to_binary(record.confidence, threshold=0.85)
 
         # Aggregate sentence-level scores and store them in the record
-        conf_agg = aggregate_confidence_scores(record.confidence)
-        record.conf_agg_max = conf_agg['conf_agg_max']
-        record.conf_agg_mean = conf_agg['conf_agg_mean']
+        # conf_agg = aggregate_confidence_scores(record.confidence)
+        # record.conf_agg_max = conf_agg['conf_agg_max']
+        # record.conf_agg_mean = conf_agg['conf_agg_mean']
         
-        bin_agg = aggregate_binary_scores(record.binary_confidence)
-        record.bin_majority = bin_agg['bin_majority']
+        # bin_agg = aggregate_binary_scores(record.binary_confidence)
+        # record.bin_majority = bin_agg['bin_majority']
         
         # Save intermediate results every 10 questions
         if (i + 1) % 10 == 0:

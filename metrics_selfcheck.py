@@ -1,54 +1,12 @@
 import torch
 import spacy
-from dataclasses import dataclass, field
-from typing import Dict, Any, List
-import re
-import string
+from typing import Any, List
+from data_requirements import QARecord, deduplicate_samples 
 import numpy as np
 
 from selfcheckgpt.modeling_selfcheck import SelfCheckNLI
 import llm_apihandler 
 
-@dataclass
-class QARecord:
-    """A class to hold all data for a single QA pair, with sentence-level scores."""
-    qa_id: str
-    context: str
-    prompt: str
-    answer: str = ""
-    # Confidence is now a dictionary to hold scores for each sentence
-    confidence: Dict[str, float] = None
-    # Store the full NLI probability distributions for each sentence
-    nli_probabilities: Dict[str, Any] = None
-    # Binary confidence scores (0/1) with default threshold 0.5
-    binary_confidence: Dict[str, int] = None
-    # -- Fields for sentence-level aggregation --
-    conf_agg_max: float = 0.0
-    conf_agg_mean: float = 0.0
-    bin_majority: int = 0
-    # -- Fields for sample-level aggregation --
-    per_sample_scores: List[float] = field(default_factory=list)
-    risk_score_mean: float = 0.0
-    risk_score_p95: float = 0.0
-    self_consistency_vote: int = 0
-
-def normalize_text(text: str) -> str:
-    """Lowercases, removes punctuation, and collapses whitespace."""
-    text = text.lower()
-    text = text.translate(str.maketrans('', '', string.punctuation))
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-def deduplicate_samples(samples: list[str]) -> list[str]:
-    """Deduplicates samples based on normalized text."""
-    seen = set()
-    unique_samples = []
-    for s in samples:
-        normalized_s = normalize_text(s)
-        if normalized_s not in seen:
-            seen.add(normalized_s)
-            unique_samples.append(s)
-    return unique_samples
 
 class HallucinationScorer:
     def __init__(self):
@@ -57,8 +15,9 @@ class HallucinationScorer:
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.selfcheck_nli = SelfCheckNLI(device=self.device)
+        self.samples = []
         
-        # Initialize spacy for sentence splitting
+        # Initialize spacy for sentence splitting (tokenization)
         try:
             self.nlp = spacy.load("en_core_web_sm")
         except OSError:
@@ -66,22 +25,19 @@ class HallucinationScorer:
             download("en_core_web_sm")
             self.nlp = spacy.load("en_core_web_sm")
 
-    def score_answer(self, original_answer: str, prompt: str, model_name: str, seed: int) -> dict:
+    def _generate_and_filter_samples(self, prompt: str, model_name: str, seed: int, min_samples: int = 20) -> List[str]:
         """
+        Generate and filter consistency samples for hallucination detection.
+        
         Args:
-            original_answer: The single, generated answer to be checked.
             prompt: The full prompt (including context) that generated the answer.
             model_name: The name of the model to use for generating consistency samples.
             seed: An integer seed for reproducibility of samples.
-
+            min_samples: Minimum number of samples required (default: 10).
+            
         Returns:
-            A dictionary containing sentence-level hallucination scores and NLI probabilities.
-            e.g., {
-                'hallucination_scores': {'sentence 1': 0.1, 'sentence 2': 0.9},
-                'nli_probabilities': {'sentence 1': [0.8, 0.1, 0.1], ...}
-            }
+            A list of filtered and deduplicated samples, or empty list if insufficient samples.
         """
-        # 1. Generate self-consistency samples
         samples = []
         
         try:
@@ -91,10 +47,33 @@ class HallucinationScorer:
             samples = [s for s in samples if len(s.split()) > 10]
             samples = deduplicate_samples(samples)
         except Exception:
-            return {}
+            return []
                 
         # Check if we have enough samples
-        if len(samples) < 10:
+        if len(samples) < min_samples:
+            return []
+            
+        return samples
+
+    def get_sentence_level_hallucination_scores(self, original_answer: str, prompt: str, model_name: str, seed: int) -> dict:
+        """
+        This function scores the answer for hallucination at the sentence level.
+        Args:
+            original_answer: The single, generated answer to be checked.
+            prompt: The full prompt (including context) that generated the answer.
+            model_name: The name of the model to use for generating consistency samples.
+            seed: An integer seed for reproducibility of samples.
+
+        Returns:
+            A dictionary containing sentence-level hallucination scores.
+            e.g., {
+                'sentence_level_hallucination_scores': {'sentence 1': 0.1, 'sentence 2': 0.9},
+            }
+        """
+        # 1. Generate self-consistency samples
+        self.samples = self._generate_and_filter_samples(prompt, model_name, seed)
+        
+        if not self.samples:
             return {}
 
         # 2. Simple sentence splitting
@@ -104,90 +83,95 @@ class HallucinationScorer:
         if not sentences_to_check:
             return {}
         
-        # 3. Run the NLI check, getting the hallucination scores directly
-        hallucination_scores = self.selfcheck_nli.predict(
+        # 3. Run the NLI check for sentences level
+        # SelfcheckGPT NLI only has entailment and contradiction probs, no neutral probs
+        # samples are considered as answers (hypothesis), so any sentence (premise) not consistent
+        #  with the answer is a contradiction/ hallucination
+        contradiction_probabilities = self.selfcheck_nli.predict(
             sentences=sentences_to_check,
             sampled_passages=samples
         )
         
         # Map each sentence to its score, handling None from predict()
-        sentence_scores = {}
-        for sentence, score in zip(sentences_to_check, hallucination_scores):
-            if score is not None:
-                sentence_scores[sentence] = max(0.0, min(1.0, float(score)))
+        sentence_level_scores = {}
+        for sentence, contradiction_probability in zip(sentences_to_check, contradiction_probabilities):
+            if contradiction_probability is not None:
+                sentence_level_scores[sentence] = max(0.0, min(1.0, float(contradiction_probability)))
         
-        if not sentence_scores:
+        if not sentence_level_scores:
             return {}
 
-        # Note: We can no longer return nli_probabilities as the library doesn't provide them
         return {
-            'hallucination_scores': sentence_scores
+            'sentence_level_hallucination_scores': sentence_level_scores
         }
 
-    def score_samples_self_consistency(self, samples: List[str]) -> List[float]:
+    def get_sample_level_hallucination_scores(self, prompt: str, model_name: str, seed: int) -> List[Any]:
         """
-        Scores each sample against the others for self-consistency.
+        Scores each sample against the others for hallucination using self-consistency checks.
         Returns:
             A list of hallucination scores, one for each sample.
+            e.g., [0.1, 0.9, 0.5, ...]
         """
-        if not samples or len(samples) < 2:
-            return []
+        # generate samples if not already generated
+        if not self.samples:
+            self.samples = self._generate_and_filter_samples(prompt, model_name, seed)
+        
 
-        per_sample_scores = []
-        for i, sample in enumerate(samples):
-            other_samples = samples[:i] + samples[i+1:]
-            
-            doc = self.nlp(sample)
-            sentences_to_check = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 5]
-            
-            if not sentences_to_check:
-                per_sample_scores.append(0.0)
-                continue
+        sample_level_hallucination_scores = []
+        for i, sample in enumerate(self.samples):
+            other_samples = self.samples[:i] + self.samples[i+1:]
+            evaluating_sample = sample
 
-            # Get NLI probabilities for [entailment, neutral, contradiction]
-            hallucination_scores = self.selfcheck_nli.predict(
-                sentences=sentences_to_check,
+            # Get NLI probability for contradiction for the evaluating sample
+            eval_sample_contradiction_probability = self.selfcheck_nli.predict(
+                sentences=evaluating_sample,
                 sampled_passages=other_samples
             )
             
             # Filter out None values from the scores
-            valid_scores = [s for s in hallucination_scores if s is not None]
+            # valid_contradiction_probabilities = [s for s in eval_sample_contradiction_probability if s is not None]
             
             # Aggregate for the sample by taking the max sentence score
-            sample_score = max(valid_scores) if valid_scores else 0.0
-            per_sample_scores.append(sample_score)
+            # sample_score = max(valid_contradiction_probabilities) if valid_contradiction_probabilities else 0.0
+            sample_level_hallucination_scores.append(eval_sample_contradiction_probability)
             
-        return per_sample_scores
+        return {
+            'sample_level_hallucination_scores': sample_level_hallucination_scores
+        }
 
-def confidence_to_binary(confidence_dict, threshold=0.5):
-    """Convert confidence scores to binary labels using standard threshold."""
-    return {k: 1 if v >= threshold else 0 for k, v in confidence_dict.items()}
+    def confidence_to_binary(self, confidence_dict, threshold=0.5):
+        """Convert confidence scores to binary labels using standard threshold."""
+        return {k: 1 if v >= threshold else 0 for k, v in confidence_dict.items()}
 
-def aggregate_confidence_scores(confidence_dict):
-    """Aggregate sentence-level confidence scores into scalar values."""
-    if not confidence_dict:
-        return {'conf_agg_max': 0.0, 'conf_agg_mean': 0.0}
-    
-    scores = list(confidence_dict.values())
-    return {
-        'conf_agg_max': max(scores),
-        'conf_agg_mean': sum(scores) / len(scores)
-    }
+    def aggregate_confidence_scores(self, confidence_dict):
+        """Aggregate sentence-level confidence scores into scalar values."""
+        if not confidence_dict:
+            return {'conf_agg_max': 0.0, 'conf_agg_mean': 0.0}
+        
+        scores = list(confidence_dict.values())
+        return {
+            'conf_agg_max': max(scores),
+            'conf_agg_mean': sum(scores) / len(scores)
+        }
 
-def aggregate_binary_scores(binary_dict):
-    """Aggregate binary scores using majority vote."""
-    if not binary_dict:
-        return {'bin_majority': 0}
-    
-    scores = list(binary_dict.values())
-    majority_vote = 1 if sum(scores) > len(scores) / 2 else 0  # Ties → 0 (explicit)
-    return {'bin_majority': majority_vote}
-    return {'bin_majority': majority_vote}
-    """Aggregate binary scores using majority vote."""
-    if not binary_dict:
-        return {'bin_majority': 0}
-    
-    scores = list(binary_dict.values())
-    majority_vote = 1 if sum(scores) > len(scores) / 2 else 0  # Ties → 0 (explicit)
-    return {'bin_majority': majority_vote}
-    return {'bin_majority': majority_vote}
+    def aggregate_binary_scores(self, binary_dict):
+        """Aggregate binary scores using majority vote."""
+        if not binary_dict:
+            return {'bin_majority': 0}
+        
+        scores = list(binary_dict.values())
+        majority_vote = 1 if sum(scores) > len(scores) / 2 else 0  # Ties → 0 (explicit)
+        return {'bin_majority': majority_vote}
+
+    def calculate_95th_percentile(self, scores_list):
+        """Calculate 95th percentile for a list of scores, filtering out None values."""
+        
+        if not scores_list:
+            return 0.0
+        
+        # Filter out None values and convert to numeric
+        valid_scores = [score for score in scores_list if score is not None]
+        if valid_scores:
+            return np.percentile(valid_scores, 95)
+        else:
+            return 0.0
