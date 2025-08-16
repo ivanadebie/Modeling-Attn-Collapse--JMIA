@@ -1,0 +1,217 @@
+from google.colab import drive
+drive.mount('/content/drive')
+
+import torch, platform
+print("Torch:", torch.__version__,
+      "| CUDA:", torch.cuda.is_available(),
+      "| Device:", (torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"),
+      "| Python:", platform.python_version())
+
+!pip -q install "transformer-lens==2.7.0" "einops==0.8.1" "datasets==2.20.0"
+
+import torch
+from transformer_lens import HookedTransformer
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = HookedTransformer.from_pretrained("gpt2-small", device=device)
+print("Layers:", model.cfg.n_layers, "| Heads:", model.cfg.n_heads, "| Ctx:", model.cfg.n_ctx)
+
+
+import pandas as pd
+from pathlib import Path
+
+ROOT = Path("/content/drive/My Drive/attention-collapse-llm")
+DATA = ROOT / "data"
+METRICS = ROOT / "metrics"
+METRICS.mkdir(parents=True, exist_ok=True)
+
+predictions_path = DATA / "81QA-longchat-13b-16k-predictions.csv"
+df = pd.read_csv(predictions_path)
+
+preferred_order = [
+    "_text","text","prompt","input","combined","full_prompt","full_input",
+    "question","query","instruction","user","content"
+]
+candidates = [c for c in preferred_order if c in df.columns]
+
+if candidates:
+    text_col = candidates[0]
+else:
+    parts = []
+    for name in ["question","context","passage","doc","evidence","instruction","system","user","assistant"]:
+        if name in df.columns:
+            parts.append(df[name].astype(str))
+    if not parts:
+        raise ValueError(f"No text-like columns. Available: {list(df.columns)}")
+    df["_text"] = parts[0]
+    for p in parts[1:]:
+        df["_text"] = df["_text"] + " " + p
+    text_col = "_text"
+
+# Stable id used for merges later
+df = df.reset_index().rename(columns={"index": "row_id"})
+
+print("Using text column:", text_col, "| rows:", len(df))
+df.head(3)[["row_id", text_col]]
+
+
+import math, torch, numpy as np
+import torch.nn.functional as F
+
+MAX_TOKENS = 512
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+def tokenize_clip(text: str, max_tokens: int = MAX_TOKENS):
+    toks = model.to_tokens(str(text), prepend_bos=True).to(device)
+    if toks.shape[-1] > max_tokens:
+        toks = toks[:, :max_tokens]
+    return toks
+
+def safe_entropy(p: torch.Tensor, dim: int = -1, eps: float = 1e-12):
+    p = p.clamp_min(eps)
+    return -(p * p.log()).sum(dim=dim)
+
+def effective_rank_from_attn(attn_matrix: torch.Tensor) -> float:
+    with torch.no_grad():
+        A = attn_matrix.to(torch.float64)
+        try:
+            s = torch.linalg.svdvals(A)
+        except RuntimeError:
+            s = torch.linalg.svdvals(A + 1e-8*torch.randn_like(A))
+        s_sum = s.sum().item()
+        if s_sum <= 0:
+            return 1.0
+        p = (s / s_sum).clamp_min(1e-12)
+        H = -(p * p.log()).sum().item()
+        return float(math.exp(H))
+
+def cosine_sim(a: torch.Tensor, b: torch.Tensor, eps: float = 1e-12):
+    a = a.to(torch.float32); b = b.to(torch.float32)
+    denom = (a.norm()+eps) * (b.norm()+eps)
+    return float((a @ b) / denom)
+
+def _get_attn_tensor_from_cache(cache, layer_idx: int):
+    key_new = f"blocks.{layer_idx}.attn.hook_pattern"
+    key_old = f"blocks.{layer_idx}.attn.hook_attn"
+    if key_new in cache: return cache[key_new]
+    if key_old in cache: return cache[key_old]
+    available = [k for k in cache.keys() if f"blocks.{layer_idx}.attn." in k]
+    raise KeyError(f"No attention key for layer {layer_idx}. Tried {key_new} and {key_old}. Available: {available[:5]} ...")
+
+def compute_metrics_for_text(text: str):
+    with torch.no_grad():
+        toks = tokenize_clip(text)
+        _, cache = model.run_with_cache(toks)
+
+        n_layers = model.cfg.n_layers
+        metrics = {}
+
+        for l in range(n_layers):
+            A = _get_attn_tensor_from_cache(cache, l)  # [1, H, Q, K]
+            A = A[0].detach().to("cpu")               # [H, Q, K]
+            H, Q, K = A.shape
+            layer_mean = A.mean(dim=0)                # [Q, K]
+            layer_mean_flat = layer_mean.reshape(-1)
+
+            for h in range(H):
+                Ah = A[h]                             # [Q, K]
+                ent_q = safe_entropy(Ah, dim=-1).mean().item()
+                erank = effective_rank_from_attn(Ah)
+                diag_mass = Ah.diagonal().mean().item() if min(Q, K) > 0 else 0.0
+                sim = cosine_sim(Ah.reshape(-1), layer_mean_flat)
+                metrics[(l, h)] = dict(
+                    entropy_mean=float(ent_q),
+                    effective_rank=float(erank),
+                    self_attn_ratio=float(diag_mass),
+                    sim_to_layer_mean=float(sim),
+                )
+        torch.cuda.empty_cache()
+        return metrics
+
+
+from pathlib import Path
+import pandas as pd
+
+METRICS.mkdir(parents=True, exist_ok=True)
+
+all_rows, errors = [], []
+for i, text in enumerate(df[text_col].astype(str).tolist()):
+    try:
+        m = compute_metrics_for_text(text)
+        for (layer, head), vals in m.items():
+            all_rows.append({
+                "row_id": i, "layer": layer, "head": head,
+                "entropy_mean": vals["entropy_mean"],
+                "effective_rank": vals["effective_rank"],
+                "self_attn_ratio": vals["self_attn_ratio"],
+                "sim_to_layer_mean": vals["sim_to_layer_mean"],
+            })
+    except Exception as e:
+        errors.append((i, str(e)))
+        all_rows.append({"row_id": i, "layer": None, "head": None, "error": str(e)})
+
+metrics_df = pd.DataFrame(all_rows)
+per_head_path = METRICS / "gpt2small_attn_metrics_per_head.csv"
+metrics_df.to_csv(per_head_path, index=False)
+
+print("Saved:", per_head_path, "| shape:", metrics_df.shape,
+      "| rows_with_errors:", metrics_df["layer"].isna().sum())
+if errors[:3]: print("Sample errors:", errors[:3])
+metrics_df.head()
+
+
+metric_cols = ["entropy_mean","effective_rank","self_attn_ratio","sim_to_layer_mean"]
+
+ok = metrics_df.copy()
+for c in metric_cols:
+    if c in ok.columns:
+        ok[c] = pd.to_numeric(ok[c], errors="coerce")
+
+if {"layer","head"}.issubset(ok.columns):
+    ok = ok.dropna(subset=["layer","head"] + metric_cols)
+else:
+    ok = ok.dropna(subset=metric_cols)
+
+# Per-layer
+if "layer" in ok.columns and len(ok):
+    layer_summary = ok.groupby("layer", as_index=False)[metric_cols].mean().sort_values("layer")
+    layer_path = METRICS / "gpt2small_attn_metrics_layer_mean.csv"
+    layer_summary.to_csv(layer_path, index=False)
+    print("Saved layer summary:", layer_path)
+
+# Per-row
+if "row_id" in ok.columns and len(ok):
+    row_summary = ok.groupby("row_id", as_index=False)[metric_cols].mean().sort_values("row_id")
+    row_path = METRICS / "gpt2small_attn_metrics_row_mean.csv"
+    row_summary.to_csv(row_path, index=False)
+    print("Saved row summary:", row_path)
+
+
+pred_df = df.copy()  # already has row_id
+row_metrics_df = pd.read_csv(METRICS / "gpt2small_attn_metrics_row_mean.csv")
+
+merged_df = pred_df.merge(row_metrics_df, on="row_id", how="left")
+merged_path = METRICS / "merged_predictions_metrics.csv"
+merged_df.to_csv(merged_path, index=False)
+print("Saved merged:", merged_path, "| shape:", merged_df.shape)
+merged_df.head(3)
+
+
+import matplotlib.pyplot as plt, pandas as pd
+
+layer_df = pd.read_csv(METRICS / "gpt2small_attn_metrics_layer_mean.csv")
+
+plt.figure(figsize=(10,6))
+for col in ["entropy_mean","effective_rank","self_attn_ratio","sim_to_layer_mean"]:
+    if col in layer_df.columns:
+        plt.plot(layer_df["layer"], layer_df[col], marker="o", label=col)
+plt.xlabel("Layer"); plt.ylabel("Value"); plt.title("Attention Metrics per Layer")
+plt.legend(); plt.grid(True); plt.show()
+
+
+# Optional — only if merged_df contains a 'score' column
+if "entropy_mean" in merged_df.columns and "score" in merged_df.columns:
+    plt.figure(figsize=(6,6))
+    plt.scatter(merged_df["entropy_mean"], merged_df["score"], alpha=0.6)
+    plt.xlabel("Mean Entropy"); plt.ylabel("Prediction Score")
+    plt.title("Entropy vs Prediction Score"); plt.grid(True); plt.show()
