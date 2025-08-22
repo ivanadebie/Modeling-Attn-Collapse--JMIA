@@ -19,61 +19,68 @@ print("Folders ready:", ROOT)
 print("Installed torch/torchvision/transformer-lens/transformers")
 
 
-import os, pandas as pd
+import os, json, pandas as pd
 
 paths = {
     "shortlist_csv": f"{OUT}/step5_head_shortlist.csv",
     "plan_csv": f"{OUT}/step5_ablation_plan.csv",
     "examples_csv": f"{STEP5}/merged_predictions_metrics.csv",
     "per_head_csv": f"{DATA}/gpt2small_attn_metrics_per_head.csv",
-    "qa_csv": f"{STEP5}/Distractors - Sheet1.csv"
+    "qa_csv": f"{STEP5}/Distractors - Sheet1.csv",
+    "output_csv": f"{OUT}/step5_ablation_results.csv",
+    "config_json": f"{STEP5}/step5_ablation_config.json",
 }
 print("Checking files:")
 for k,p in paths.items():
+    if k.endswith("_json"): 
+        continue
     print(k, "->", os.path.exists(p), "|", p)
-
-
-import json, os
 
 CFG = {
   "paths": {
-    "shortlist_csv": f"{OUT}/step5_head_shortlist.csv",
-    "plan_csv": f"{OUT}/step5_ablation_plan.csv",
-    "examples_csv": f"{STEP5}/merged_predictions_metrics.csv",
-    "per_head_csv": f"{DATA}/gpt2small_attn_metrics_per_head.csv",
-    "output_csv": f"{OUT}/step5_ablation_results.csv"
+    "shortlist_csv": paths["shortlist_csv"],
+    "plan_csv": paths["plan_csv"],
+    "examples_csv": paths["examples_csv"],
+    "per_head_csv": paths["per_head_csv"],
+    "output_csv": paths["output_csv"]
   }
 }
-with open(f"{STEP5}/step5_ablation_config.json","w") as f:
+with open(paths["config_json"], "w") as f:
     json.dump(CFG, f, indent=2)
-
-print("Config written:", f"{STEP5}/step5_ablation_config.json")
-print(json.dumps(CFG, indent=2))
+print("Config written:", paths["config_json"])
 
 
-import pandas as pd
+import pandas as pd, numpy as np
 
-qa = pd.read_csv(f"{STEP5}/Distractors - Sheet1.csv")
+qa = pd.read_csv(paths["qa_csv"])
 assert "Question" in qa.columns and "Gold Text" in qa.columns, "QA sheet must have 'Question' and 'Gold Text'."
 
 gold_map = qa.rename(columns={"Question":"question","Gold Text":"gold_answer"})[["question","gold_answer"]].copy()
 gold_map["question"] = gold_map["question"].astype(str).str.strip()
 gold_map["gold_answer"] = gold_map["gold_answer"].astype(str).str.strip()
 
-ex = pd.read_csv(f"{STEP5}/merged_predictions_metrics.csv")
+ex = pd.read_csv(paths["examples_csv"])
 ex["question"] = ex["question"].astype(str).str.strip()
 
+# Drop the existing gold_answer column from ex if it exists to avoid merge conflicts
+if "gold_answer" in ex.columns:
+    ex = ex.drop(columns=["gold_answer"])
+
 merged = ex.merge(gold_map, on="question", how="left")
-merged.to_csv(f"{STEP5}/merged_predictions_metrics.csv", index=False)
+merged.to_csv(paths["examples_csv"], index=False)
 
 print("Merged gold answers into examples")
-print("rows:", len(merged), " | missing gold:", merged["gold_answer_x"].isna().sum())
-print(merged[["row_id","question"]].head(3))
+print("rows:", len(merged), " | missing gold:", merged["gold_answer"].isna().sum())
+merged.head(3)
 
 
 runner_code = r'''
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Step 5 — Head-ablation paired evaluation with lightweight collapse metrics.
+Outputs per-row before/after answers + metrics for external scoring.
+"""
 
 import os, json
 os.environ["TRANSFORMERS_NO_TORCHVISION"] = "1"  # avoid torchvision import issues
@@ -83,30 +90,39 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
+# ------------------------------
+# Load config & data
+# ------------------------------
 CFG = json.load(open("step5_ablation_config.json","r"))
-
 SHORTLIST = Path(CFG["paths"]["shortlist_csv"])
 PLAN      = Path(CFG["paths"]["plan_csv"])
 EXAMPLES  = Path(CFG["paths"]["examples_csv"])
 PER_HEAD  = Path(CFG["paths"]["per_head_csv"])
 OUTPUT    = Path(CFG["paths"]["output_csv"])
 
-short_df = pd.read_csv(SHORTLIST)   # layer, head, (_collapse_score)
+short_df = pd.read_csv(SHORTLIST)   # layer, head, _collapse_score
 plan_df  = pd.read_csv(PLAN)        # first col = row_id
-ex_df    = pd.read_csv(EXAMPLES)    # row_id, question, ctxs, gold_answer, ...
+ex_df    = pd.read_csv(EXAMPLES)    # row_id, question, ctxs, model_answer, gold_answer, ...
 
 TARGETS: List[Tuple[int,int]] = [(int(r["layer"]), int(r["head"])) for _, r in short_df.iterrows()]
 
-# ---- Model ----
+# ------------------------------
+# Model & hooks
+# ------------------------------
 from transformer_lens import HookedTransformer
 import torch
+import torch.nn.functional as F
+from transformer_lens.hook_points import HookPoint
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model  = HookedTransformer.from_pretrained("gpt2-small", device=device)
 
-ALPHA_DOSAGE = 0.5  # try 0.5, then 0.25 for sensitivity
+# ALPHA_DOSAGE scales selected heads at attn.hook_result:
+# 1.0 = no ablation, 0.5 = half-strength, 0.0 = hard-zero (full ablation).
+ALPHA_DOSAGE = 0.5
 
 def make_ablation_hooks(targets: List[Tuple[int,int]]):
-    """Scale specified heads at attn.hook_result by ALPHA_DOSAGE (0..1)."""
+    """Return TL forward hooks that scale selected heads at attn.hook_result by ALPHA_DOSAGE."""
     by_layer = {}
     for L, H in targets:
         by_layer.setdefault(int(L), []).append(int(H))
@@ -115,6 +131,7 @@ def make_ablation_hooks(targets: List[Tuple[int,int]]):
         name = f"blocks.{L}.attn.hook_result"
         def _mk(hlist):
             def _fn(value, hook):
+                # value: [batch, heads, seq, d_head]
                 value[:, hlist, :, :] = value[:, hlist, :, :] * ALPHA_DOSAGE
                 return value
             return _fn
@@ -123,7 +140,39 @@ def make_ablation_hooks(targets: List[Tuple[int,int]]):
 
 ABLT_HOOKS = make_ablation_hooks(TARGETS)
 
+# ------------------------------
+# Collapse metric helpers
+# ------------------------------
+def attn_entropy(attn_probs: torch.Tensor) -> float:
+    """Mean token-wise attention entropy."""
+    p = attn_probs.clamp_min(1e-9)
+    H = (-p * p.log()).sum(dim=-1)              # [b,h,q]
+    return H.mean().item()
+
+def effective_rank(x: torch.Tensor, energy=0.99) -> float:
+    """Average effective rank across heads via SVD energy threshold."""
+    b,h,s,d = x.shape
+    x2 = x.permute(1,0,2,3).contiguous().view(h, b*s, d)   # [h, N, d]
+    ranks = []
+    for i in range(h):
+        u,sing,vh = torch.linalg.svd(x2[i], full_matrices=False)
+        cum = (sing**2).cumsum(0) / (sing**2).sum()
+        r = int((cum < energy).sum().item()) + 1
+        ranks.append(r)
+    return float(sum(ranks)/len(ranks))
+
+def self_attn_ratio(attn_probs: torch.Tensor) -> float:
+    """Mean diagonal attention mass (self-focus)."""
+    b,h,q,k = attn_probs.shape
+    diag = torch.arange(q, device=attn_probs.device)
+    mass = attn_probs[..., diag, diag]          # [b,h,q]
+    return mass.mean().item()
+
+# ------------------------------
+# Prompt & generation
+# ------------------------------
 def build_prompt(row: pd.Series) -> str:
+    """Compose a strict copy-from-context prompt; short answers; 'I don't know' if absent."""
     q   = str(row.get("question","")).strip()
     ctx = str(row.get("ctxs","")).strip()
     return (
@@ -132,47 +181,93 @@ def build_prompt(row: pd.Series) -> str:
         f"Context:\n{ctx}\n\nQuestion: {q}\nAnswer:"
     )
 
-def greedy_generate(prompt: str, max_new_tokens: int = 16, use_ablation: bool = False) -> str:
+def greedy_generate(prompt: str, max_new_tokens: int = 16, use_ablation: bool = False,
+                    extra_hooks: List[Tuple[str, callable]] = None) -> Tuple[str, dict]:
+    """Generate short continuation; optional head ablation; returns text and collected metrics."""
     toks = model.to_tokens(prompt)
-    if use_ablation:
-        with model.hooks(fwd_hooks=ABLT_HOOKS):
-            out = model.generate(toks, max_new_tokens=max_new_tokens)
-    else:
-        out = model.generate(toks, max_new_tokens=max_new_tokens)
-    gen = model.to_string(out[0, toks.shape[1]:])
-    return gen.strip()
 
-def evaluate_single_example(row: pd.Series, use_ablation: bool, targets: List[Tuple[int,int]]) -> Dict[str, Any]:
+    # Collect attention & head-result across (possibly) ablated layers only
+    collected_attn = []
+    collected_head_out = []
+    def attn_hook(value, hook: HookPoint):
+        collected_attn.append(value.detach())
+        return value
+    def result_hook(value, hook: HookPoint):
+        collected_head_out.append(value.detach())
+        return value
+
+    # choose layers to log (keep cheap)
+    target_layers = {L for (L,_) in TARGETS} if use_ablation else {L for (L,_) in TARGETS}
+    hooks = []
+    for L in sorted(target_layers):
+        hooks.append((f"blocks.{L}.attn.hook_attn", attn_hook))
+        hooks.append((f"blocks.{L}.attn.hook_result", result_hook))
+    if extra_hooks:
+        hooks.extend(extra_hooks)
+
+    fwd = ABLT_HOOKS if use_ablation else []
+    with model.hooks(fwd_hooks=fwd + hooks):
+        out = model.generate(toks, max_new_tokens=max_new_tokens)
+
+    gen = model.to_string(out[0, toks.shape[1]:]).strip()
+
+    # metrics
+    if collected_attn:
+        attn_cat = torch.cat(collected_attn, dim=0)
+        entropy = attn_entropy(attn_cat)
+        self_ratio = self_attn_ratio(attn_cat)
+    else:
+        entropy = float("nan")
+        self_ratio = float("nan")
+    if collected_head_out:
+        head_cat = torch.cat(collected_head_out, dim=0)
+        erank = effective_rank(head_cat)
+    else:
+        erank = float("nan")
+
+    return gen, {"entropy": entropy, "erank": erank, "self_ratio": self_ratio}
+
+# ------------------------------
+# Single-example evaluation
+# ------------------------------
+def evaluate_single_example(row: pd.Series, use_ablation: bool) -> Dict[str, Any]:
+    """
+    Run one example through GPT‑2 small, optionally with head ablation.
+    Returns generated answer + collapse metrics (entropy, erank, self_ratio).
+    """
     prompt = build_prompt(row)
-    answer = greedy_generate(prompt, max_new_tokens=16, use_ablation=use_ablation)
-    halluc_label = 0  # scorer comes later; we export answers for external scoring
+    answer, mets = greedy_generate(prompt, max_new_tokens=16, use_ablation=use_ablation)
     return {
         "row_id": int(row["row_id"]),
-        "hallucinated": int(halluc_label),
-        "entropy": np.nan,
-        "erank":   np.nan,
-        "hsim":    np.nan,
-        "self_ratio": np.nan,
+        "hallucinated": 0,         # label comes from external F1 scorer
+        "entropy": float(mets["entropy"]),
+        "erank":   float(mets["erank"]),
+        "hsim":    float("nan"),   # optional, add later
+        "self_ratio": float(mets["self_ratio"]),
         "answer": answer
     }
 
+# ------------------------------
+# Main paired loop
+# ------------------------------
 def main():
-    plan_id_col = plan_df.columns[0]
+    plan_id_col = plan_df.columns[0]   # first col is row_id
     plan_ids = set(plan_df[plan_id_col].tolist())
     subset = ex_df[ex_df["row_id"].isin(plan_ids)].copy().sort_values("row_id")
 
     rows = []
     for _, row in subset.iterrows():
-        base  = evaluate_single_example(row, use_ablation=False, targets=[])
-        after = evaluate_single_example(row, use_ablation=True,  targets=TARGETS)
+        base  = evaluate_single_example(row, use_ablation=False)
+        after = evaluate_single_example(row, use_ablation=True)
+
         rows.append({
             "row_id": int(row["row_id"]),
             "halluc_before": int(base["hallucinated"]),
             "halluc_after":  int(after["hallucinated"]),
-            "d_entropy":    np.nan,
-            "d_erank":      np.nan,
-            "d_hsim":       np.nan,
-            "d_self_ratio": np.nan,
+            "d_entropy":    (after["entropy"] - base["entropy"]) if (not pd.isna(base["entropy"]) and not pd.isna(after["entropy"])) else np.nan,
+            "d_erank":      (after["erank"]   - base["erank"])   if (not pd.isna(base["erank"])   and not pd.isna(after["erank"]))   else np.nan,
+            "d_hsim":       (after["hsim"]    - base["hsim"])    if (not pd.isna(base["hsim"])    and not pd.isna(after["hsim"]))    else np.nan,
+            "d_self_ratio": (after["self_ratio"] - base["self_ratio"]) if (not pd.isna(base["self_ratio"]) and not pd.isna(after["self_ratio"])) else np.nan,
             "answer_before": base.get("answer"),
             "answer_after":  after.get("answer")
         })
@@ -181,11 +276,11 @@ def main():
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(OUTPUT, index=False)
     print(f"[OK] Saved paired ablation results -> {OUTPUT}  (n={len(out)})")
+    print(out[["row_id","answer_before","answer_after"]].head(8).to_string(index=False))
 
 if __name__ == "__main__":
     main()
 '''
-
 with open(f"{STEP5}/step5_ablation_runner.py","w") as f:
     f.write(runner_code)
 
@@ -201,22 +296,22 @@ from scipy.stats import binomtest
 import re
 from collections import Counter
 
-res_path = f"{OUT}/step5_ablation_results.csv"
-ex_path  = f"{STEP5}/merged_predictions_metrics.csv"
+res_path = paths["output_csv"]
+ex_path  = paths["examples_csv"]
 
 res = pd.read_csv(res_path)
 ex  = pd.read_csv(ex_path)[["row_id","gold_answer"]]
 df  = res.merge(ex, on="row_id", how="left")
 
-def normalize_text_strict(s: str) -> str:
+def normalize_text(s: str) -> str:
     s = (s or "").lower().strip()
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s)
     return s
 
 def f1_match(pred: str, gold: str) -> float:
-    p = normalize_text_strict(pred).split()
-    g = normalize_text_strict(gold).split()
+    p = normalize_text(pred).split()
+    g = normalize_text(gold).split()
     if not p or not g: return 0.0
     pc, gc = Counter(p), Counter(g)
     overlap = sum((pc & gc).values())
@@ -225,174 +320,114 @@ def f1_match(pred: str, gold: str) -> float:
     recall    = overlap / len(g)
     return 2 * precision * recall / (precision + recall + 1e-9)
 
-df["halluc_before_f1"] = df.apply(lambda r: 1 if f1_match(str(r.get("answer_before","")) or "", str(r.get("gold_answer","")) or "") < 0.5 else 0, axis=1)
-df["halluc_after_f1"]  = df.apply(lambda r: 1 if f1_match(str(r.get("answer_after",""))  or "", str(r.get("gold_answer","")) or "") < 0.5 else 0, axis=1)
+# hallucination flags (1 = hallucination / F1<0.5)
+df["halluc_before_f1"] = df.apply(lambda r: 1 if f1_match(str(r.get("answer_before","")), str(r.get("gold_answer",""))) < 0.5 else 0, axis=1)
+df["halluc_after_f1"]  = df.apply(lambda r: 1 if f1_match(str(r.get("answer_after","")),  str(r.get("gold_answer",""))) < 0.5 else 0, axis=1)
 
 before = df["halluc_before_f1"].mean()
 after  = df["halluc_after_f1"].mean()
 delta  = after - before
 
-b01 = ((df["halluc_before_f1"]==0) & (df["halluc_after_f1"]==1)).sum()
-b10 = ((df["halluc_before_f1"]==1) & (df["halluc_after_f1"]==0)).sum()
+b01 = ((df["halluc_before_f1"]==0) & (df["halluc_after_f1"]==1)).sum()  # got worse
+b10 = ((df["halluc_before_f1"]==1) & (df["halluc_after_f1"]==0)).sum()  # improved
 n   = b01 + b10
 pval = binomtest(k=min(b01,b10), n=n, p=0.5, alternative="two-sided").pvalue if n>0 else float("nan")
 
-print(f"Hallucination (F1<0.5) — before: {before:.3f} | after: {after:.3f} | delta: {delta:.3f}")
-print(f"McNemar: 0→1={b01}, 1→0={b10}, pairs={n}, p={pval:.4g}")
-
 scored_path = f"{OUT}/step5_ablation_results_scored.csv"
 df.to_csv(scored_path, index=False)
-print("Saved scored file:", scored_path)
 
-# quick peek
+print(f"Hallucination (F1<0.5) — before: {before:.3f} | after: {after:.3f} | delta: {delta:.3f}")
+print(f"McNemar: 0→1={b01}, 1→0={b10}, pairs={n}, p={pval:.4g}")
+print("Saved scored file:", scored_path)
 df.head(5)
 
 
-# ===== Step A — Build master analysis table =====
-import os, re, json
-import pandas as pd
-from collections import Counter
+# Build master table (ablation + examples + gold)
+m = df.merge(pd.read_csv(paths["examples_csv"]), on="row_id", suffixes=("","_ex"), how="left")
 
-ROOT  = "/content/drive/MyDrive/attention-collapse-llm"
-STEP5 = f"{ROOT}/step5"
-OUT   = f"{ROOT}/step5_outputs"
-
-paths = {
-    "res":   f"{OUT}/step5_ablation_results.csv",          # from runner (has answer_before/answer_after)
-    "ex":    f"{STEP5}/merged_predictions_metrics.csv",    # examples + gold_answer
-    "qa":    f"{STEP5}/Distractors - Sheet1.csv"           # synthetic QA sheet (for metadata)
-}
-
-for k,p in paths.items():
-    assert os.path.exists(p), f"Missing {k}: {p}"
-
-# --- load
-res = pd.read_csv(paths["res"])
-ex  = pd.read_csv(paths["ex"])
-qa  = pd.read_csv(paths["qa"])
-
-# --- normalize/join keys
-ex["question"] = ex["question"].astype(str).str.strip()
-qa["Question_norm"] = qa["Question"].astype(str).str.strip() if "Question" in qa.columns else ""
-# Merge ablation results (on row_id) -> examples (on row_id)
-m = res.merge(ex, on="row_id", how="left", validate="one_to_one")
-
-# --- Join QA metadata by question text (robust, only uses columns that exist)
-# Normalize a clean "question" on the QA sheet
+# (Optional) if your QA sheet has metadata columns (interference_type, etc.), join them here
+qa = pd.read_csv(paths["qa_csv"])
 if "Question" in qa.columns:
-    qa["Question_norm"] = qa["Question"].astype(str).str.strip()
-else:
-    qa["Question_norm"] = ""  # if sheet lacks the column, will be ignored
-
-# Map SOURCE column names -> TARGET names for a tidy qa_meta
-col_map = {
-    "interference_type": ["Interference Type","interference_type","Interference"],
-    "distractor_density": ["Distractor Density","distractor_density","Distractors"],
-    "evidence_position": ["Evidence Position","evidence_position","Evidence Location"],
-    "context_length": ["Context Length","context_length","Ctx Len"],
-}
-
-source_to_target = {"Question_norm": "question"}  # <- create 'question' from 'Question_norm'
-found_targets = []  # which metadata targets we actually found
-
-for target_name, candidates in col_map.items():
-    for cand in candidates:
+    qa["question"] = qa["Question"].astype(str).str.strip()
+    keep_cols = ["question"]
+    for cand, out_name in [
+        ("Interference Type","interference_type"),
+        ("Distractor Density","distractor_density"),
+        ("Evidence Position","evidence_position"),
+        ("Context Length","context_length"),
+    ]:
         if cand in qa.columns:
-            source_to_target[cand] = target_name
-            found_targets.append(target_name)
-            break
+            qa = qa.rename(columns={cand: out_name})
+            keep_cols.append(out_name)
+    qa_meta = qa[keep_cols].copy()
+    if "question" in m.columns:
+        m = m.merge(qa_meta, on="question", how="left")
 
-# Build qa_meta with only the columns that exist
-qa_meta = qa.rename(columns=source_to_target)[["question"] + found_targets] if "Question_norm" in qa.columns else pd.DataFrame()
-
-# Merge onto the main table by 'question' if available
-if not qa_meta.empty and "question" in qa_meta.columns and "question" in m.columns:
-    m = m.merge(qa_meta, on="question", how="left")
-
-
-# --- F1 scorer (strict-ish but reasonable)
-def norm(s: str) -> str:
-    s = (s or "").lower().strip()
-    s = re.sub(r"[^a-z0-9\s]", " ", s)
-    s = re.sub(r"\s+", " ", s)
-    return s
-def f1_match(pred: str, gold: str) -> float:
-    p = norm(pred).split()
-    g = norm(gold).split()
-    if not p or not g: return 0.0
-    pc, gc = Counter(p), Counter(g)
-    overlap = sum((pc & gc).values())
-    if overlap == 0: return 0.0
-    precision = overlap / len(p)
-    recall    = overlap / len(g)
-    return 2 * precision * recall / (precision + recall + 1e-9)
-
-# prefer answers produced by runner; fallback to model_answer if needed
-m["answer_before_eff"] = m["answer_before"].fillna(m.get("model_answer", ""))
-m["answer_after_eff"]  = m["answer_after"].fillna(m.get("model_answer", ""))
-
-# ensure gold exists
-if "gold_answer" not in m.columns:
-    raise RuntimeError("gold_answer missing in merged_predictions_metrics.csv — please merge from QA first.")
-
-# halluc flags (1 = hallucination)
-m["halluc_before_f1"] = m.apply(lambda r: 1 if f1_match(str(r["answer_before_eff"]), str(r["gold_answer"])) < 0.5 else 0, axis=1)
-m["halluc_after_f1"]  = m.apply(lambda r: 1 if f1_match(str(r["answer_after_eff"]),  str(r["gold_answer"])) < 0.5 else 0, axis=1)
-m["improved"]         = ((m["halluc_before_f1"]==1) & (m["halluc_after_f1"]==0)).astype(int)
-m["worsened"]         = ((m["halluc_before_f1"]==0) & (m["halluc_after_f1"]==1)).astype(int)
-
-# quick sanity prints
-n = len(m)
-before = m["halluc_before_f1"].mean()
-after  = m["halluc_after_f1"].mean()
-print(f"n={n} | before={before:.3f} | after={after:.3f} | delta={(after-before):.3f}")
-print("columns present:", [c for c in ["interference_type","distractor_density","evidence_position","context_length"] if c in m.columns])
-
-# save master
 master_path = f"{OUT}/step5_analysis_master.csv"
 m.to_csv(master_path, index=False)
 print("saved master:", master_path)
+print("n=", len(m), "| before=", m["halluc_before_f1"].mean(), "| after=", m["halluc_after_f1"].mean())
 
-# peek a few rows
-display(m[["row_id","interference_type","distractor_density","evidence_position","halluc_before_f1","halluc_after_f1","improved","worsened"]].head(8) if "interference_type" in m.columns or "distractor_density" in m.columns else m.head(8))
-
-
-import pandas as pd
-
-master_path = "/content/drive/MyDrive/attention-collapse-llm/step5_outputs/step5_analysis_master.csv"
-m = pd.read_csv(master_path)
-print("rows:", len(m))
-print("columns:", list(m.columns)[:15], "...")
-
-
-# Hallucination rates before/after
-print("Hallucination (F1<0.5) — before=%.3f | after=%.3f" % (
-    (m["halluc_before_f1"]<0.5).mean(),
-    (m["halluc_after_f1"]<0.5).mean()
-))
-
-# How many improved vs worsened
-print("Improved:", (m["improved"]==1).sum(), "| Worsened:", (m["worsened"]==1).sum())
-
-# If metadata columns exist (like interference_type, distractor_density)
-for col in ["interference_type","distractor_density","evidence_position","context_length"]:
-    if col in m.columns:
-        print("\nBy", col)
-        print(m.groupby(col)[["halluc_before_f1","halluc_after_f1"]].mean())
-
-
+# Simple histograms for metric deltas (if not all NaN)
 import matplotlib.pyplot as plt
-
-# Histogram of entropy/rank deltas
-for col in ["d_entropy","d_erank","d_hsim"]:
+for col in ["d_entropy","d_erank","d_self_ratio"]:
     if col in m.columns:
         m[col].dropna().hist(bins=20)
         plt.title(col + " distribution")
         plt.show()
 
-# Scatterplot: entropy change vs hallucination
-if "d_entropy" in m.columns:
-    plt.scatter(m["d_entropy"], (m["halluc_after_f1"]<0.5).astype(int))
-    plt.xlabel("Δ Entropy")
-    plt.ylabel("Hallucination after (0/1)")
-    plt.show()
+
+# Minimal clean-vs-collapsed cache & patch utilities
+from transformer_lens import ActivationCache
+
+def run_with_cache(prompt: str, use_ablation: bool):
+    """Return tokens and activation cache for a given prompt (with/without ablation)."""
+    toks = model.to_tokens(prompt)
+    fwd = ABLT_HOOKS if use_ablation else []
+    with model.hooks(fwd_hooks=fwd):
+        _, cache = model.run_with_cache(toks)
+    return toks, cache
+
+def patch_layer_span(layer: int, span: slice, clean_cache: ActivationCache, name="attn.hook_result"):
+    """Return a TL hook that overwrites a layer's activation on a token span with clean values."""
+    key = f"blocks.{layer}.attn.hook_result" if name=="attn.hook_result" else f"blocks.{layer}.hook_resid_pre"
+    def hook_fn(value, hook):
+        value[:,:,span,:] = clean_cache[key][:,:,span,:]
+        return value
+    return (key, hook_fn)
+
+# Example usage:
+# row = m.iloc[0]
+# prompt = ( "Answer ONLY using the context..." )  # or build_prompt(row)
+# toks, clean_cache = run_with_cache(prompt, use_ablation=False)
+# _, collapsed_cache = run_with_cache(prompt, use_ablation=True)
+# patch = patch_layer_span(layer=6, span=slice(100,120), clean_cache=clean_cache)
+# with model.hooks(fwd_hooks=[patch]):
+#     out = model.generate(toks, max_new_tokens=16)
+# patched_answer = model.to_string(out[0, toks.shape[1]:])
+
+
+# 1) Files exist
+import os, pandas as pd
+base="/content/drive/MyDrive/attention-collapse-llm"
+check = [
+  f"{base}/step5_outputs/step5_head_shortlist.csv",
+  f"{base}/step5_outputs/step5_ablation_plan.csv",
+  f"{base}/step5/merged_predictions_metrics.csv",
+  f"{base}/data/gpt2small_attn_metrics_per_head.csv",
+  f"{base}/step5/step5_ablation_config.json",
+  f"{base}/step5_outputs/step5_ablation_results.csv",
+  f"{base}/step5_outputs/step5_ablation_results_scored.csv",
+  f"{base}/step5_outputs/step5_analysis_master.csv",
+]
+print({p: os.path.exists(p) for p in check})
+
+# 2) Runner output sanity
+res = pd.read_csv(f"{base}/step5_outputs/step5_ablation_results.csv")
+print("res cols:", list(res.columns))
+print("metrics non-null rates:", res[["d_entropy","d_erank","d_self_ratio"]].notna().mean())
+
+# 3) Scored output sanity
+sc = pd.read_csv(f"{base}/step5_outputs/step5_ablation_results_scored.csv")
+print("scored cols:", [c for c in sc.columns if "halluc" in c or "answer_" in c or c=="gold_answer"][:12])
+print(sc[["row_id","answer_before","answer_after","gold_answer"]].head(3).to_string(index=False))
