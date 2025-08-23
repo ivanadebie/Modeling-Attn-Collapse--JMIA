@@ -8,3 +8,11 @@ python -u ./scripts/get_qa_responses_from_longchat.py \
   --batch-size 8 \
   --max-memory-per-gpu 63 \
   --closedbook
+
+
+## Run this before pip install -e.
+
+```bash
+ apt-get update
+ apt-get install cmake zlib1g-dev
+```
