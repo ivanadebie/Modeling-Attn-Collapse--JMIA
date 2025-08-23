@@ -75,7 +75,7 @@ def main():
         sentence_level_hallu_scores = scorer.get_sentence_level_hallucination_scores(record.answer, full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
         sample_level_hallu_scores = scorer.get_sample_level_hallucination_scores(full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
         
-        whole_answer_hallu_score = scorer.aggregate_confidence_scores(sample_level_hallu_scores)
+        whole_answer_hallu_score = scorer.aggregate_confidence_scores(sentence_level_hallu_scores)
         whole_answer_hallu_label = scorer.confidence_to_binary(whole_answer_hallu_score['conf_agg_mean'], threshold=0.85) #1-hallu / 0-not hallu
 
         model_response_uncertainty = scorer.aggregate_confidence_scores(sample_level_hallu_scores)['conf_agg_mean']
@@ -85,7 +85,7 @@ def main():
         )
 
         record.hallucination_label = whole_answer_hallu_label
-        record.hallucination_score = whole_answer_hallu_score
+        record.hallucination_score = whole_answer_hallu_score['conf_agg_mean']
         record.model_response_uncertainty = model_response_uncertainty
         record.confidence = 1 - model_response_uncertainty
         record.sentence_level_hallu_scores = sentence_level_hallu_scores['sentence_level_hallucination_scores']
