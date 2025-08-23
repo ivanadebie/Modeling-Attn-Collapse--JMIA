@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Fill Interference for Synthetic_QA.csv by comparing distractors from
-Copy_of_Nonsensical_Distractor.csv against each QA's question and gold answer.
+Nonsensical_Distractor.csv against each QA's question and gold answer.
 
 Interference classes:
 - paraphrased: high similarity to gold/question
@@ -20,9 +20,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-# -----------------------------
-# Utilities
-# -----------------------------
 def norm_cols(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out.columns = [re.sub(r"\s+", " ", str(c)).strip() for c in out.columns]
