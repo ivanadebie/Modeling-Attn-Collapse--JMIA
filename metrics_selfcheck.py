@@ -89,7 +89,7 @@ class HallucinationScorer:
         #  with the answer is a contradiction/ hallucination
         contradiction_probabilities = self.selfcheck_nli.predict(
             sentences=sentences_to_check,
-            sampled_passages=samples
+            sampled_passages=self.samples
         )
         
         # Map each sentence to its score, handling None from predict()
