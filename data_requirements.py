@@ -10,21 +10,13 @@ class QARecord:
     context: str
     prompt: str
     answer: str = ""
-    # Confidence is now a dictionary to hold scores for each sentence
     confidence: Dict[str, float] = None
-    # Store the full NLI probability distributions for each sentence
-    nli_probabilities: Dict[str, Any] = None
-    # Binary confidence scores (0/1) with default threshold 0.5
-    binary_confidence: Dict[str, int] = None
-    # -- Fields for sentence-level aggregation --
-    conf_agg_max: float = 0.0
-    conf_agg_mean: float = 0.0
-    bin_majority: int = 0
-    # -- Fields for sample-level aggregation --
-    per_sample_scores: List[float] = field(default_factory=list)
-    risk_score_mean: float = 0.0
-    risk_score_p95: float = 0.0
-    self_consistency_vote: int = 0
+    model_response_uncertainty: float = 0.0
+    hallucination_label: int = 0
+    hallucination_score: float = 0.0
+    sentence_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
+    sample_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
+    sample_level_95th_percentile: float = 0.0
 
 def normalize_text(text: str) -> str:
     """Lowercases, removes punctuation, and collapses whitespace."""
@@ -42,4 +34,6 @@ def deduplicate_samples(samples: list[str]) -> list[str]:
         if normalized_s not in seen:
             seen.add(normalized_s)
             unique_samples.append(s)
+    print(unique_samples)
     return unique_samples
+  
