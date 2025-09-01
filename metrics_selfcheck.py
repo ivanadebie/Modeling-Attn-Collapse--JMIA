@@ -49,10 +49,6 @@ class HallucinationScorer:
         except Exception:
             return []
                 
-        # Check if we have enough samples
-        if len(samples) < min_samples:
-            return []
-            
         return samples
 
     def get_sentence_level_hallucination_scores(self, original_answer: str, prompt: str, model_name: str, seed: int) -> dict:
@@ -89,7 +85,7 @@ class HallucinationScorer:
         #  with the answer is a contradiction/ hallucination
         contradiction_probabilities = self.selfcheck_nli.predict(
             sentences=sentences_to_check,
-            sampled_passages=samples
+            sampled_passages=self.samples
         )
         
         # Map each sentence to its score, handling None from predict()
@@ -105,39 +101,39 @@ class HallucinationScorer:
             'sentence_level_hallucination_scores': sentence_level_scores
         }
 
-    def get_sample_level_hallucination_scores(self, prompt: str, model_name: str, seed: int) -> List[Any]:
-        """
-        Scores each sample against the others for hallucination using self-consistency checks.
-        Returns:
-            A list of hallucination scores, one for each sample.
-            e.g., [0.1, 0.9, 0.5, ...]
-        """
-        # generate samples if not already generated
-        if not self.samples:
-            self.samples = self._generate_and_filter_samples(prompt, model_name, seed)
+    # def get_sample_level_hallucination_scores(self, prompt: str, model_name: str, seed: int) -> List[Any]:
+    #     """
+    #     Scores each sample against the others for hallucination using self-consistency checks.
+    #     Returns:
+    #         A list of hallucination scores, one for each sample.
+    #         e.g., [0.1, 0.9, 0.5, ...]
+    #     """
+    #     # generate samples if not already generated
+    #     if not self.samples:
+    #         self.samples = self._generate_and_filter_samples(prompt, model_name, seed)
         
 
-        sample_level_hallucination_scores = []
-        for i, sample in enumerate(self.samples):
-            other_samples = self.samples[:i] + self.samples[i+1:]
-            evaluating_sample = sample
+    #     sample_level_hallucination_scores = []
+    #     for i, sample in enumerate(self.samples):
+    #         other_samples = self.samples[:i] + self.samples[i+1:]
+    #         evaluating_sample = sample
 
-            # Get NLI probability for contradiction for the evaluating sample
-            eval_sample_contradiction_probability = self.selfcheck_nli.predict(
-                sentences=evaluating_sample,
-                sampled_passages=other_samples
-            )
+    #         # Get NLI probability for contradiction for the evaluating sample
+    #         eval_sample_contradiction_probability = self.selfcheck_nli.predict(
+    #             sentences=evaluating_sample,
+    #             sampled_passages=other_samples
+    #         )
             
-            # Filter out None values from the scores
-            # valid_contradiction_probabilities = [s for s in eval_sample_contradiction_probability if s is not None]
+    #         # Filter out None values from the scores
+    #         # valid_contradiction_probabilities = [s for s in eval_sample_contradiction_probability if s is not None]
             
-            # Aggregate for the sample by taking the max sentence score
-            # sample_score = max(valid_contradiction_probabilities) if valid_contradiction_probabilities else 0.0
-            sample_level_hallucination_scores.append(eval_sample_contradiction_probability)
+    #         # Aggregate for the sample by taking the max sentence score
+    #         # sample_score = max(valid_contradiction_probabilities) if valid_contradiction_probabilities else 0.0
+    #         sample_level_hallucination_scores.append(eval_sample_contradiction_probability)
             
-        return {
-            'sample_level_hallucination_scores': sample_level_hallucination_scores
-        }
+    #     return {
+    #         'sample_level_hallucination_scores': sample_level_hallucination_scores
+    #     }
 
     def confidence_to_binary(self, confidence_dict, threshold=0.5):
         """Convert confidence scores to binary labels using standard threshold."""
@@ -145,10 +141,10 @@ class HallucinationScorer:
 
     def aggregate_confidence_scores(self, confidence_dict):
         """Aggregate sentence-level confidence scores into scalar values."""
-        if not confidence_dict:
+        scores_dict = confidence_dict.get('sentence_level_hallucination_scores', {})
+        scores = list(scores_dict.values()) if isinstance(scores_dict, dict) else []
+        if not scores:
             return {'conf_agg_max': 0.0, 'conf_agg_mean': 0.0}
-        
-        scores = list(confidence_dict.values())
         return {
             'conf_agg_max': max(scores),
             'conf_agg_mean': sum(scores) / len(scores)
