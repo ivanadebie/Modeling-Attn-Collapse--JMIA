@@ -36,17 +36,17 @@ def compute_distractor_density(record):
     return density, ratio
 
 def compute_gold_position(record):
-    docs = record.get("documents", [])
-    gold = record.get("gold_answer", "")
+    docs = [d.strip().lower() for d in record.get("documents", [])]
+    gold = record.get("gold_answer", "").strip().lower()
     if not docs or gold not in docs:
-        return "unknown"
+        return "unknown", -1
     idx = docs.index(gold)
     if idx == 0:
-        return "beginning"
+        return "beginning", idx
     elif idx == len(docs) - 1:
-        return "end"
+        return "end", idx
     else:
-        return "middle"
+        return "middle", idx
 
 def main():
     parser = argparse.ArgumentParser()
