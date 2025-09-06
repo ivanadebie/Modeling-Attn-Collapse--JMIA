@@ -38,15 +38,55 @@ def compute_distractor_density(record):
 def compute_gold_position(record):
     docs = [d.strip().lower() for d in record.get("documents", [])]
     gold = record.get("gold_answer", "").strip().lower()
+    
     if not docs or gold not in docs:
-        return "unknown", -1
+        return {
+            "doc_position": "unknown", 
+            "doc_index": -1, 
+            "span_start": -1.0, 
+            "span_end": -1.0
+        }
+    
     idx = docs.index(gold)
     if idx == 0:
-        return "beginning", idx
+        pos = "beginning"
     elif idx == len(docs) - 1:
-        return "end", idx
+        pos = "end"
     else:
-        return "middle", idx
+        pos = "middle"
+    
+    tokens = []
+    for d in docs:
+        tokens.extend(d.split())
+    
+    gold_words = gold.split()
+    total_tokens = len(tokens)
+    
+    span_start, span_end = -1, -1
+    for i in range(total_tokens - len(gold_words) + 1):
+        if tokens[i:i+len(gold_words)] == gold_words:
+            span_start = i
+            span_end = i + len(gold_words)
+            break
+    
+    if span_start == -1:
+        return {
+            "doc_position": pos, 
+            "doc_index": idx, 
+            "span_start": -1.0, 
+            "span_end": -1.0
+        }
+    
+    span_start_norm = span_start / total_tokens
+    span_end_norm = span_end / total_tokens
+    
+    return {
+        "doc_position": pos,
+        "doc_index": idx,
+        "span_start": round(span_start_norm, 3),
+        "span_end": round(span_end_norm, 3)
+    }
+
 
 def main():
     parser = argparse.ArgumentParser()
