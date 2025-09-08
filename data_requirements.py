@@ -17,6 +17,9 @@ class QARecord:
     sentence_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
     sample_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
     sample_level_95th_percentile: float = 0.0
+    distractor_density_class: str = ""
+    interference_type: str = ""
+    evidence_position: str = ""
 
 def normalize_text(text: str) -> str:
     """Lowercases, removes punctuation, and collapses whitespace."""
