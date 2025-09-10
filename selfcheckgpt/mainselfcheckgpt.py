@@ -1,17 +1,20 @@
 import pandas as pd
 from pyparsing import col
+from sympy import re
+import re
 from tqdm import tqdm 
 from dataclasses import asdict
 import numpy as np
-
+import os
 import llm_apihandler
 from data_requirements import QARecord, deduplicate_samples 
 from metrics_selfcheck import HallucinationScorer
 from data_utils import save_results_to_csv
 
-INPUT_DATA_PATH = 'true_synthetic_qa_with_metadata_final.csv'   
-OUTPUT_DATA_PATH = 'results_nli_labeled.csv' 
-MODEL_TO_USE = "openai/gpt-3.5-turbo" 
+INPUT_DATA_PATH = os.path.join(os.path.dirname(__file__), 'true_synthetic_qa_with_metadata_final.csv')
+#filepath: c:\Users\anand\Documents\Modeling-Attn-Collapse--JMIA\selfcheckgpt\mainselfcheckgpt.py
+OUTPUT_DATA_PATH = os.path.join(os.path.dirname(__file__), 'results_nli_labeled.csv')
+MODEL_TO_USE = "openai/gpt-3.5-turbo"
 
 
 def main():
@@ -26,13 +29,9 @@ def main():
         prompt = row.get('Prompt', '')
         full_model_prompts.append(prompt)
 
-        # Combine only Gold Text, Distractor 1 Text and Distractor 2 Text
-        context_parts = []
-        for col in ['Gold Text', 'Distractor 1 Text', 'Distractor 2 Text']:
-                val = row.get(col, '')
-                if isinstance(val, str) and val.strip():
-                    context_parts.append(val)
-        context_part = "\n\n".join(context_parts)
+        # Extract only the context documents (remove instructions and question)
+        match = re.search(r'(Document \[1\][\s\S]*)', prompt)
+        context_part = match.group(1) if match else ""
             
         record = QARecord(
             qa_id=qa_id, 
@@ -52,9 +51,16 @@ def main():
         
         # Use the stored full model prompt for generating consistency samples
         full_model_prompt = full_model_prompts[i]
+
+        print(f"Answer: {record.answer!r}")
+        print(f"Prompt/context for scoring: {full_model_prompt or record.prompt!r}")
+        sentence_level_hallu_scores = scorer.get_sentence_level_hallucination_scores(
+            record.answer, full_model_prompt or record.prompt, MODEL_TO_USE, seed=i
+        )
+        print(f"Sentence-level scores: {sentence_level_hallu_scores}")
         
         # Pass a seed for reproducible sample generation (i is a simple choice)
-        sentence_level_hallu_scores = scorer.get_sentence_level_hallucination_scores(record.answer, full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
+        sentence_level_hallu_scores = scorer.get_sentence_level_hallucination_scores(record.answer, record.context, MODEL_TO_USE, seed=i)
         # sample_level_hallu_scores = scorer.get_sample_level_hallucination_scores(full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
       
         whole_answer_hallu_score = scorer.aggregate_confidence_scores(sentence_level_hallu_scores)
