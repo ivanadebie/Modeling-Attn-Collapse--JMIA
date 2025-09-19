@@ -36,20 +36,23 @@ def make_prompt(dens, type, pos, ques, docs):
         documents = make_documents(dens, type, pos, ques)
     prompt = "Answer the question using the documents below: \n\n"
     prompt += "Question: " + questions[ques] + "?"
+    answer = answers[ques]
+    if dens == 2:
+        answer = remove_filler_text(questions[ques], answers[ques])
     if pos == 0:
-        prompt += "\n\nDocument [1]\n" + answers[ques]
+        prompt += "\n\nDocument [1]\n" + answer
         for i in range(len(documents)):
             prompt += "\n\nDocument [" + str(i + 2) + "]\n" + documents[i]
     if pos == 1:
         for i in range(len(documents) // 2):
             prompt += "\n\nDocument [" + str(i + 1) + "]\n" + documents[i]
-        prompt += "\n\nDocument [" + str(len(documents) // 2 + 1) + "]\n" + answers[ques]
+        prompt += "\n\nDocument [" + str(len(documents) // 2 + 1) + "]\n" + answer
         for i in range(len(documents) // 2, len(documents)):
             prompt += "\n\nDocument [" + str(i + 2) + "]\n" + documents[i]
     if pos == 2:
         for i in range(len(documents)):
             prompt += "\n\nDocument [" + str(i + 1) + "]\n" + documents[i]
-        prompt += "\n\nDocument [" + str(len(documents) + 1) + "]\n" + answers[ques]
+        prompt += "\n\nDocument [" + str(len(documents) + 1) + "]\n" + answer
     return prompt
 
 def remove_filler_text(ques, answer):
