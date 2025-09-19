@@ -12,19 +12,16 @@ def make_documents(dens, type, pos, ques):
     if type == 0:
         response = client.responses.create(
             model="gpt-4.1",
-            #input="Write 200 to 250 tokens of nonsense (in one paragraph) unrelated to this question: " + question + "? Please just respond with your paragraph, nothing else. Make sure it no less than 200 tokens and no more than 250 tokens."
             input ="Write me exactly " + str(sizes[dens]) + " answers, each one 200 to 250 tokens (so overall " + str(sizes[dens] * 200) + " to " + str(sizes[dens] * 250) + "tokens), of nonsense unrelated to this question: " + question + "? Seperate your each answer with this unique delimiter: '$$'. Just respond with your answers, nothing else (for instance nothing like 'Sure! here are your answers:'). Be sure your each answer is nonsensical and is 200 to 250 tokens! It MUST be between 200 to 250 tokens."
         )
     if type == 1:
         response = client.responses.create(
             model="gpt-4.1",
-            #input="Write 200 to 250 tokens of nonsense (in one paragraph) unrelated to this question: " + question + "? Please just respond with your paragraph, nothing else. Make sure it no less than 200 tokens and no more than 250 tokens."
             input ="Write me exactly " + str(sizes[dens]) + " answers, each one 200 to 250 tokens (so overall " + str(sizes[dens] * 200) + " to " + str(sizes[dens] * 250) + "tokens), related to topics in this question, but don't answer it: " + question + "? Seperate your each answer with this unique delimiter: '$$'. Just respond with your answers, nothing else (for instance nothing like 'Sure! here are your answers:'). Be sure your each answer is on topic to the question but doesn't answer it and is 200 to 250 tokens! It MUST be between 200 to 250 tokens. Answer assertively like a textbook."
         )
     if type == 2:
         response = client.responses.create(
             model="gpt-4.1",
-            #input="Write 200 to 250 tokens of nonsense (in one paragraph) unrelated to this question: " + question + "? Please just respond with your paragraph, nothing else. Make sure it no less than 200 tokens and no more than 250 tokens."
             input ="Write me exactly " + str(sizes[dens]) + " answers, each one 200 to 250 tokens (so overall " + str(sizes[dens] * 200) + " to " + str(sizes[dens] * 250) + "tokens), of the wrong answer to this question, though you can state correct facts less assertively or buried deeper into your answer: " + question + "? Seperate your each answer with this unique delimiter: '$$'. Just respond with your answers, nothing else (for instance nothing like 'Sure! here are your answers:'). Be sure your each answer answers the question incorrectly and is 200 to 250 tokens! It MUST be between 200 to 250 tokens. Answer assertively like a textbook. Don't say stuff like 'many believe that XYZ is in ABC' say just 'XYZ is in ABC' as you are presenting it like fact!"
         )
     documents = response.output_text.split("$$")
@@ -54,3 +51,10 @@ def make_prompt(dens, type, pos, ques, docs):
             prompt += "\n\nDocument [" + str(i + 1) + "]\n" + documents[i]
         prompt += "\n\nDocument [" + str(len(documents) + 1) + "]\n" + answers[ques]
     return prompt
+
+def remove_filler_text(ques, answer):
+    response = client.responses.create(
+            model="gpt-4.1",
+            input = "Take this question: " + ques + " and this answer: " + answer " and strip the answer of any filler text unrelated to thw question. Only respond with the stripped text, no other words. Your answer must come straight from the answer!"
+    )
+    return response
