@@ -51,7 +51,8 @@ def make_prompt(dens, type, pos, ques, docs, tokens):
             prompt += "\n\nDocument [" + str(i + 1) + "]\n" + documents[i]
         prompt += "\n\nDocument [" + str(len(documents) + 1) + "]\n" + answers[ques]
 
-    prompt += "\n\n" + fillerText(tokens - getTokens(prompt))
+    if dens != 2:
+        prompt += "\n\n" + fillerText(tokens - getTokens(prompt))
     
     return prompt
 
