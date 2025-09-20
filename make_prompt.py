@@ -30,7 +30,7 @@ def make_documents(dens, type, pos, ques):
 
 # Same variables as make_documents + docs variable (set to None if not passed)
 # Returns the full prompt
-def make_prompt(dens, type, pos, ques, docs):
+def make_prompt(dens, type, pos, ques, docs, tokens):
     documents = docs
     if documents == None:
         documents = make_documents(dens, type, pos, ques)
@@ -50,6 +50,9 @@ def make_prompt(dens, type, pos, ques, docs):
         for i in range(len(documents)):
             prompt += "\n\nDocument [" + str(i + 1) + "]\n" + documents[i]
         prompt += "\n\nDocument [" + str(len(documents) + 1) + "]\n" + answers[ques]
+
+    prompt += "\n\n" + fillerText(tokens - getTokens(prompt))
+    
     return prompt
 
 # Makes filler text a multiple of 100 tokens long
@@ -72,3 +75,10 @@ def fillerText(tokens):
       )
 
     return text + response.output_text
+
+def getTokens(text):
+    response = client.responses.create(
+        model="gpt-4o",
+        input="Give me the amount of tokens in this text: " + text + " Give me only a number, like '405' or '293,' no other words are accepted."
+    )
+    return int(response.output_text)
