@@ -4,7 +4,7 @@ import pandas as pd
 results_nli = pd.read_csv('results_nli_labeled.csv')
 
 # Apply the threshold rule to create the label
-threshold = 0.2
+threshold = 0.4
 results_nli['label_not_hallu'] = results_nli['hallucination_score'].apply(
     lambda x: 'not hallu' if x <= threshold else 'hallu'
 )

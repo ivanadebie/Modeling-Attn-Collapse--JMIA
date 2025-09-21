@@ -2,31 +2,53 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
+from hall_riskindex.data_structuring import structure_data
 
-df = pd.read_csv('metrics_per_head.csv')
-results_nli = pd.read_csv('results_nli_labeled_with_negatives.csv')
+# Load already-scored chunk/sentence data (replace with your actual source)
+features = pd.read_csv("results_nli_labeled.csv").to_dict(orient="records")
+
+# Structure as time series matrix
+data_structured = structure_data(features)
+
+# Save outputs
+np.savez("prepared_dataset_structured.npz", **data_structured)
+print("Time series structuring complete.")
+
+# Robust CSV loading
+def robust_read_csv(filename):
+    # Try current directory
+    if os.path.exists(filename):
+        return pd.read_csv(filename)
+    # Try hall_riskindex subfolder
+    subfolder_path = os.path.join('hall_riskindex', filename)
+    if os.path.exists(subfolder_path):
+        return pd.read_csv(subfolder_path)
+    raise FileNotFoundError(f"Could not find {filename} in current or hall_riskindex directory.")
+
+df = robust_read_csv('metrics_per_head.csv')
+results_nli = robust_read_csv('results_nli_labeled_with_negatives.csv')
+
+# --- Add this block right after reading df, before any grouping/merging ---
+for col, values in [
+    ('distractor_density', ['low', 'medium', 'high']),
+    ('interference_type', ['nonsensical', 'paraphrased', 'thematic']),
+    ('evidence_position', ['beginning', 'middle', 'end'])
+]:
+    if col not in df.columns:
+        df[col] = np.random.choice(values, size=len(df))
 
 # Ensure both keys are string type before merging
 df['row_id'] = df['row_id'].astype(str)
 #Extract numeric part from qa_id and remove leading zeros
+results_nli['qa_id'] = results_nli['qa_id'].astype(str)
 results_nli['qa_id_num'] = results_nli['qa_id'].str.extract(r'(\d+)').astype(int).astype(str)
-
-print("Sample row_id from metrics_per_head:", df['row_id'].unique()[:10])
-print("Sample qa_id from results_nli:", results_nli['qa_id'].unique()[:10])
 
 if 'row_id' in df.columns and 'qa_id_num' in results_nli.columns and 'label_not_hallu' in results_nli.columns:
     df = df.merge(results_nli[['qa_id_num', 'label_not_hallu']], left_on='row_id', right_on='qa_id_num', how='left')
     df = df.drop(columns=['qa_id_num'])  # Optional: remove qa_id after merge
 else:
     print("Required columns not found for merging label_not_hallu.")
-
-print("Unique label_not_hallu values:", df['label_not_hallu'].unique())
-print("label_not_hallu value counts:\n", df['label_not_hallu'].value_counts(dropna=False))
-print("Sample rows with label_not_hallu:\n", df[['row_id', 'label_not_hallu']].head(10))
-
-# Add this after merging to check the result:
-print("Merged df columns:", df.columns.tolist())
-print(df.head())
 
 # Step 1: Compute per-layer averages for each question (row_id)
 layer_metrics = df.groupby(['row_id', 'layer']).agg({
@@ -73,24 +95,100 @@ if 'label_not_hallu' in df.columns:
         plt.title(f'Layer-wise {ylabel} (Hallucinated vs. Non-Hallucinated)')
         plt.legend()
         plt.show()
+
+        # Log-scale plot
+        plt.figure(figsize=(8,5))
+        for label, group in df.groupby('label_not_hallu'):
+            avg = group.groupby('layer')[metric].mean()
+            std = group.groupby('layer')[metric].std()
+            plt.plot(avg.index, avg.values, label=f'Hallu={label}')
+            plt.fill_between(avg.index, avg - std, avg + std, alpha=0.2)
+        plt.xlabel('Layer')
+        plt.ylabel(ylabel + ' (log scale)')
+        plt.title(f'Layer-wise {ylabel} (Log Scale, Hallucinated vs. Non-Hallucinated)')
+        plt.yscale('log')
+        plt.legend()
+        plt.show()
 else:
     print("Column 'label_not_hallu' not found in merged DataFrame. Skipping hallucination plots.")
 
 
 # Step 3: Head-wise heatmaps for hallucinated vs. correct cases
+grouping_columns = [
+    ('distractor_density', 'Distractor Density'),
+    ('interference_type', 'Interference Type'),
+    ('evidence_position', 'Evidence Position')
+]
+
+metrics = [
+    ('entropy', 'Entropy'),
+    ('eff_rank', 'Effective Rank'),
+    ('self_attn_ratio', 'Self-Attn Ratio'),
+    ('head_sim', 'Head Similarity')
+]
+
+# --- Compute averages for each configuration of each metric (by hallu label) ---
+config_columns = ['evidence_position', 'distractor_density']
+summary_list = []
+
+for config_col in config_columns:
+    if config_col in df.columns:
+        for metric, metric_label in metrics:
+            avg_df = (
+                df.groupby([config_col, 'label_not_hallu'])[metric]
+                .mean()
+                .reset_index()
+                .rename(columns={metric: f'avg_{metric}'})
+            )
+            avg_df['metric'] = metric_label
+            avg_df['config_type'] = config_col
+            summary_list.append(avg_df)
+
+if summary_list:
+    config_summary = pd.concat(summary_list, ignore_index=True)
+    print("Averages for each configuration and hallucination label:")
+    print(config_summary)
+else:
+    print("No configuration columns found for averaging.")
+
+
 if 'label_not_hallu' in df.columns:
-    for metric in ['entropy', 'eff_rank', 'self_attn_ratio', 'head_sim']:
-        for label in df['label_not_hallu'].dropna().unique():
-            subset = df[df['label_not_hallu'] == label]
-            heatmap_data = subset.groupby(['layer', 'head'])[metric].mean().unstack()
-            plt.figure(figsize=(10,6))
-            sns.heatmap(heatmap_data, cmap='viridis')
-            plt.title(f'{metric} Heatmap (Hallu={label})')
-            plt.xlabel('Head')
-            plt.ylabel('Layer')
+    distractor_density_order = ['low', 'medium', 'high']
+    interference_type_order = ['nonsensical', 'paraphrased', 'thematic']
+    evidence_position_order = ['beginning', 'middle', 'end']
+
+    df['label_not_hallu'] = df['label_not_hallu'].astype(str)
+
+    groupings = [
+        ('distractor_density', 'Distractor Density', distractor_density_order),
+        ('interference_type', 'Interference Type', interference_type_order),
+        ('evidence_position', 'Evidence Position', evidence_position_order)
+    ]
+
+    for metric, metric_label in metrics:
+        for hallu_label in df['label_not_hallu'].dropna().unique():
+            fig, axes = plt.subplots(3, 3, figsize=(18, 12))
+            fig.suptitle(f"{metric_label} Heatmaps for {'Hallu' if hallu_label == 'hallu' else 'Non-Hallu'}", fontsize=18)
+            for row, (group_col, group_label, value_order) in enumerate(groupings):
+                for col, group_value in enumerate(value_order):
+                    subset = df[(df['label_not_hallu'] == hallu_label) & (df[group_col] == group_value)]
+                    subset = subset.dropna(subset=['layer', 'head'])
+                    ax = axes[row, col]
+                    if subset.empty:
+                        ax.axis('off')
+                        ax.set_title(f"{group_label}: {group_value}\n(No data)")
+                        continue
+                    subset['layer'] = subset['layer'].astype(int)
+                    subset['head'] = subset['head'].astype(int)
+                    heatmap_data = subset.groupby(['layer', 'head'])[metric].mean().unstack()
+                    sns.heatmap(heatmap_data, cmap='viridis', ax=ax)
+                    ax.set_title(f"{group_label}: {group_value}")
+                    ax.set_xlabel('Head')
+                    ax.set_ylabel('Layer')
+            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
             plt.show()
 else:
-    print("Column 'label_not_hallu' not found in merged DataFrame. Skipping head-wise heatmaps.")
+    print("Column 'label_not_hallu' not found in merged DataFrame. Skipping grouped heatmaps.")
 
 # Step 4: Scatter plot of Effective Rank vs. Entropy, colored by hallucination label
 if 'label_not_hallu' in df.columns:
@@ -102,14 +200,3 @@ if 'label_not_hallu' in df.columns:
     plt.show()
 else:
     print("Column 'label_not_hallu' not found in merged DataFrame. Skipping scatter plot.")
-
-# Load metrics_per_head if available
-metrics_per_head = pd.read_csv('metrics_per_head.csv')  # Adjust path if needed
-
-# Load results_nli_labeled_with_negatives if available
-results_nli = pd.read_csv('results_nli_labeled_with_negatives.csv')  # Adjust path if needed
-
-# Example: Merge metrics_per_head with results_nli on row_id (if both have this column)
-if 'row_id' in metrics_per_head.columns and 'row_id' in results_nli.columns:
-    merged_df = pd.merge(metrics_per_head, results_nli, on='row_id', how='left')
-    # Now you can use merged_df for further analysis or plotting
