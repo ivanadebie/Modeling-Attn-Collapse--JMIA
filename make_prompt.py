@@ -23,21 +23,11 @@ def fillerText(tokens):
         length = getTokens(txt)
         counter += length
 
-    return text
+    return [text, counter]
 
-txt = fillerText(40000)
-
-fill = open("filler.txt", "w")
-fill.write(txt)
-
-def getTokens(text):
-    response = client.responses.create(
-        model="gpt-4o",
-        input="Give me the amount of tokens in this text: " + text + " Give me only a number, like '405' or '293,' no other words are accepted."
-    )
-    return int(response.output_text)
-
-txt = fillerText(40000)
+filler = fillerText(40000)
+txt = filler[0]
+count = filler[1]
 length = len(txt)
 
 fill = open("filler.txt", "w")
@@ -97,7 +87,7 @@ def make_prompt(dens, type, pos, ques, docs, tokens):
         prompt += "\n\nDocument [" + str(len(documents) + 1) + "]\n" + answers[ques]
     
     if dens != 2:
-        prop = (tokens - getTokens(prompt)) / tokens
+        prop = (tokens - getTokens(prompt)) / count
         val = int(prop * length)
         prompt += "\n\n" + txt[:val]
     
