@@ -38,6 +38,7 @@ def getTokens(text):
     return int(response.output_text)
 
 txt = fillerText(40000)
+length = len(txt)
 
 fill = open("filler.txt", "w")
 fill.write(txt)
