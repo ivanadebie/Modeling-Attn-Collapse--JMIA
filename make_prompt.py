@@ -26,8 +26,10 @@ def getTokens(text):
     )
     return int(response.output_text)
 
-largeFillerText = fillerText(40000)
-length = len(largeFillerText)
+txt = fillerText(40000)
+
+fill = open("filler.txt", "w")
+fill.write(txt)
 
 # These variables range from 0 to 2.
 # Distractor (dens)ity: {0: low, 1: medium, 2: high}
@@ -85,6 +87,6 @@ def make_prompt(dens, type, pos, ques, docs, tokens):
     if dens != 2:
         prop = (tokens - getTokens(prompt)) / tokens
         val = int(prop * length)
-        prompt += "\n\n" + largeFillerText[:val]
+        prompt += "\n\n" + txt[:val]
     
     return prompt
