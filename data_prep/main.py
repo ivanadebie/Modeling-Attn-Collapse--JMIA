@@ -1,3 +1,9 @@
+import pandas as pd
+from make_prompt import make_prompt, make_documents
+from openai import OpenAI
+client = OpenAI(api_key="Open AI Key")
+
+
 # Sets up basic table to export
 def makeTable():
     export = {'Setup': {}, 'Prompt': {}, 'Question': {}, 'Gold Text': {}}
@@ -7,40 +13,53 @@ def makeTable():
 
     return export
 
-# Makes the configuration for the 3x3x3 matrix for the questions
+# Makes all 27 configurations for a given question
 def makeConfig(ques):
-    dens = ques // 9 % 3
-    type = ques // 27 % 3
-    pos = ques // 3 % 3
-    return dens, type, pos
+    configs = []
+    for dens in range(3):  # 3 distractor densities
+        for type in range(3):  # 3 types
+            for pos in range(3):  # 3 positions
+                configs.append((dens, type, pos))
+    return configs
 
 # Fills the table with prompts and distractors
-def fillTable(numQues):
+def fillTable(numQues, tokens):
     export = makeTable()
+    row_index = 1
 
     for i in range(numQues):
-        dens, type, pos = makeConfig(i)
+        configs = makeConfig(i)  # Get all 27 configurations for this question
+        
+        for config_idx, (dens, type, pos) in enumerate(configs):
+            # Inserts name of the config into table
+            setup = ['Low', 'Medium', 'High'][dens] + '-' + ['N', 'T', 'P'][type] + '-' + ['Beg', 'Mid', 'End'][pos]
+            print(f"Question {i+1}, Config {config_idx+1}/27: {setup}")
+            
+            if i < 4:
+                continue
+            if i == 4:
+                return
+                
+            export['Setup'][row_index] = setup
 
-        # Inserts name of the config into table
-        setup = ['Low', 'Medium', 'High'][dens] + '-' + ['N', 'T', 'P'][type] + '-' + ['Beg', 'Mid', 'End'][pos]
-        export['Setup'][i + 1] = setup
+            # Generate documents and prompt
+            docs = make_documents(dens, type, pos, i, client)
+            prompt = make_prompt(dens, type, pos, i, docs, tokens, client)  # Using 40000 tokens as default
 
-        # Generate documents and prompt
-        docs = make_documents(dens, type, pos, i)
-        prompt = make_prompt(dens, type, pos, i, docs)
+            # Inserts prompt, question, and correct answer into table
+            export['Prompt'][row_index] = prompt
+            export['Question'][row_index] = questions[i]
+            export['Gold Text'][row_index] = answers[i]
 
-        # Inserts prompt, question, and correct answer into table
-        export['Prompt'][i + 1] = prompt
-        export['Question'][i + 1] = questions[i]
-        export['Gold Text'][i + 1] = answers[i]
-
-        # Inserts distractors into table
-        for j in range(len(docs)):
-            export['Distractor ' + str((j + 1)) + ' Text'][i + 1] = docs[j]
+            # Inserts distractors into table
+            for j in range(len(docs)):
+                export['Distractor ' + str((j + 1)) + ' Text'][row_index] = docs[j]
+            
+            row_index += 1
 
     data = pd.DataFrame(export)
     data.to_excel("Distractors.xlsx")
 
 # Calls the function
 if __name__ == "__main__":
-    fillTable(81)
+    fillTable(81, 8000)
