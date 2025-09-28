@@ -102,9 +102,9 @@ def fillTable(tokens, question_data_path, domain, output_path):
             break
 
     data = pd.DataFrame(export)
-    data.to_excel(output_path)
+    data.to_csv(output_path)
 
 # Calls the function
 if __name__ == "__main__":
     tokens=8000
-    fillTable(tokens=tokens, question_data_path='qbank_by_domain/01_nq_closed_book.jsonl', domain='01_nq_closed_book', output_path=f'domain1_data_3questions_{tokens}_final.xlsx')
+    fillTable(tokens=tokens, question_data_path='qbank_by_domain/01_nq_closed_book.jsonl', domain='01_nq_closed_book', output_path=f'domain1_data_3questions_{tokens}_final.csv')
