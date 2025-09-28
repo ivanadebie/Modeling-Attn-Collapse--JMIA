@@ -1,3 +1,38 @@
+import tiktoken
+
+enc = tiktoken.encoding_for_model("gpt-4.1")  
+
+def getTokens(text):
+    return len(enc.encode(text))
+
+def fillerText(tokens):
+    enc = tiktoken.encoding_for_model("gpt-4.1")  
+    
+    ft = "the following section provides general guidance for navigating this document and maintaining a steady reading rhythm. it exists as structural padding, not as a source of facts, conclusions, or evidence relevant to any question. readers may skim it freely without missing essential content or changing the interpretation of adjacent material. the paragraphs use plain language, neutral tone, and consistent pacing to support clarity and reduce distraction. headings, transitions, and spacing are referenced in general terms to preserve flow across sections and pages. no specific entities, events, figures, or citations are introduced, and no claims are advanced or disputed. the emphasis is on readability, orientation, and coherence so that the main arguments can remain in sharp focus. where examples might appear in other contexts, this text intentionally avoids them to prevent unintended cues. if a reader pauses here, they should expect continuity rather than new information, analysis, or instructions. after this segment, the document resumes its core discussion, and any decisions should rely on subsequent content. overall, this material is supportive rather than informative, designed to keep momentum while remaining neutral, unobtrusive, and safely ignorable for factual evaluation."
+    counter = 0
+    text = ""
+
+    while(counter < tokens):
+        response = client.responses.create(
+            model="gpt-4.1",
+            input="Give me thousands of tokens of filler text, text which doesn't have meaning, but is logical. Here is an example: " + ft + " Please use proper English; use capitalization, punctuation, grammar, etc. Only respond with the filler text, no extra text like 'I can definitely add on to this filler text! NO EXTRA TEXT OR YOU WILL HAVE TO REDO IT.'",
+            temperature=0.4,
+        )
+        txt = response.output_text
+        text += txt
+        length = getTokens(txt)
+        counter += length
+
+    return [text, counter]
+
+filler = fillerText(40000)
+txt = filler[0]
+count = filler[1]
+length = len(txt)
+
+fill = open("filler.txt", "w")
+fill.write(txt)
+
 # These variables range from 0 to 2.
 # Distractor (dens)ity: {0: low, 1: medium, 2: high}
 # Interference (type): {0: nonsensical, 1: thematic, 2: paraphrased}
@@ -12,19 +47,16 @@ def make_documents(dens, type, pos, ques):
     if type == 0:
         response = client.responses.create(
             model="gpt-4.1",
-            #input="Write 200 to 250 tokens of nonsense (in one paragraph) unrelated to this question: " + question + "? Please just respond with your paragraph, nothing else. Make sure it no less than 200 tokens and no more than 250 tokens."
             input ="Write me exactly " + str(sizes[dens]) + " answers, each one 200 to 250 tokens (so overall " + str(sizes[dens] * 200) + " to " + str(sizes[dens] * 250) + "tokens), of nonsense unrelated to this question: " + question + "? Seperate your each answer with this unique delimiter: '$$'. Just respond with your answers, nothing else (for instance nothing like 'Sure! here are your answers:'). Be sure your each answer is nonsensical and is 200 to 250 tokens! It MUST be between 200 to 250 tokens."
         )
     if type == 1:
         response = client.responses.create(
             model="gpt-4.1",
-            #input="Write 200 to 250 tokens of nonsense (in one paragraph) unrelated to this question: " + question + "? Please just respond with your paragraph, nothing else. Make sure it no less than 200 tokens and no more than 250 tokens."
             input ="Write me exactly " + str(sizes[dens]) + " answers, each one 200 to 250 tokens (so overall " + str(sizes[dens] * 200) + " to " + str(sizes[dens] * 250) + "tokens), related to topics in this question, but don't answer it: " + question + "? Seperate your each answer with this unique delimiter: '$$'. Just respond with your answers, nothing else (for instance nothing like 'Sure! here are your answers:'). Be sure your each answer is on topic to the question but doesn't answer it and is 200 to 250 tokens! It MUST be between 200 to 250 tokens. Answer assertively like a textbook."
         )
     if type == 2:
         response = client.responses.create(
             model="gpt-4.1",
-            #input="Write 200 to 250 tokens of nonsense (in one paragraph) unrelated to this question: " + question + "? Please just respond with your paragraph, nothing else. Make sure it no less than 200 tokens and no more than 250 tokens."
             input ="Write me exactly " + str(sizes[dens]) + " answers, each one 200 to 250 tokens (so overall " + str(sizes[dens] * 200) + " to " + str(sizes[dens] * 250) + "tokens), of the wrong answer to this question, though you can state correct facts less assertively or buried deeper into your answer: " + question + "? Seperate your each answer with this unique delimiter: '$$'. Just respond with your answers, nothing else (for instance nothing like 'Sure! here are your answers:'). Be sure your each answer answers the question incorrectly and is 200 to 250 tokens! It MUST be between 200 to 250 tokens. Answer assertively like a textbook. Don't say stuff like 'many believe that XYZ is in ABC' say just 'XYZ is in ABC' as you are presenting it like fact!"
         )
     documents = response.output_text.split("$$")
@@ -33,7 +65,7 @@ def make_documents(dens, type, pos, ques):
 
 # Same variables as make_documents + docs variable (set to None if not passed)
 # Returns the full prompt
-def make_prompt(dens, type, pos, ques, docs):
+def make_prompt(dens, type, pos, ques, docs, tokens):
     documents = docs
     if documents == None:
         documents = make_documents(dens, type, pos, ques)
@@ -53,4 +85,10 @@ def make_prompt(dens, type, pos, ques, docs):
         for i in range(len(documents)):
             prompt += "\n\nDocument [" + str(i + 1) + "]\n" + documents[i]
         prompt += "\n\nDocument [" + str(len(documents) + 1) + "]\n" + answers[ques]
+    
+    if dens != 2:
+        prop = (tokens - getTokens(prompt)) / count
+        val = int(prop * length)
+        prompt += "\n\n" + txt[:val]
+    
     return prompt
