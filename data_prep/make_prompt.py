@@ -1,3 +1,6 @@
+from openai import OpenAI
+
+
 # These variables range from 0 to 2.
 # Distractor (dens)ity: {0: low, 1: medium, 2: high}
 # Interference (type): {0: nonsensical, 1: thematic, 2: paraphrased}
@@ -5,7 +8,7 @@
 # The ques(tion) variable is a number from [0, 80] of the question number.
 
 # Returns the documents
-def make_documents(dens, type, pos, ques):
+def make_documents(dens, type, pos, ques, client):
     question = questions[ques]
     sizes = [2, 6, 10]
     response = None
@@ -30,10 +33,10 @@ def make_documents(dens, type, pos, ques):
 
 # Same variables as make_documents + docs variable (set to None if not passed)
 # Returns the full prompt
-def make_prompt(dens, type, pos, ques, docs, tokens):
+def make_prompt(dens, type, pos, ques, docs, tokens, client):
     documents = docs
     if documents == None:
-        documents = make_documents(dens, type, pos, ques)
+        documents = make_documents(dens, type, pos, ques, client)
     prompt = "Answer the question using the documents below: \n\n"
     prompt += "Question: " + questions[ques] + "?"
     if pos == 0:
