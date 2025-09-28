@@ -45,8 +45,9 @@ def make_prompt(dens, type, pos, question, gold_text, docs, tokens, client):
     documents = docs
     if documents == None:
         raise ValueError("Documents cannot be None")
-    prompt = "Answer the question using the documents below: \n\n"
-    prompt += "Question: " + question + "?"
+    
+    prompt = "Question: " + question + "? \n\n"
+    prompt += "Answer the question using the documents below: \n\n"
     if pos == 0:
         prompt += "\n\nDocument [1]\n" + gold_text
         for i in range(len(documents)):
