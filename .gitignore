@@ -3,5 +3,6 @@ __pycache__
 .env
 .env.txt
 data_prep/*.json
+data_prep/*.jsonl
 data_prep/*.csv
 data_prep/*.xlsx
