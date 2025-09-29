@@ -40,7 +40,7 @@ def fillTable(tokens, question_data_path, domain, output_path):
             question_data.append(json.loads(line))
 
     # Load existing JSON results
-    json_filename = f"{output_path.split('.')[0]}.json"
+    json_filename = f"{output_path.split('.')[0]}.jsonl"
     try:
         with open(json_filename, 'r') as json_file:
             all_results = json.load(json_file)
@@ -101,9 +101,9 @@ def fillTable(tokens, question_data_path, domain, output_path):
 
 
     data = pd.DataFrame(export)
-    data.to_csv(output_path)
+    data.to_csv(output_path, sep="\t", index=False)
 
 # Calls the function
 if __name__ == "__main__":
     tokens=8000
-    fillTable(tokens=tokens, question_data_path='qbank_by_domain/01_nq_closed_book.jsonl', domain='01_nq_closed_book', output_path=f'domain1_data_{tokens}.csv')
+    fillTable(tokens=tokens, question_data_path='qbank_by_domain/01_nq_closed_book.jsonl', domain='01_nq_closed_book', output_path=f'domain1_data_{tokens}.tsv')
