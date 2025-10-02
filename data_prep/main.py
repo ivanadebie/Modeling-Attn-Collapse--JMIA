@@ -100,10 +100,23 @@ def fillTable(tokens, question_data_path, domain, output_path):
         print("Completed question", i+1, "in", time.time() - start_time_question, "seconds")
 
 
-    data = pd.DataFrame(export)
-    data.to_csv(output_path, sep="\t", index=False)
+    # data = pd.DataFrame(export)
+    # data.to_csv(output_path, sep="\t", index=False)
+    print(f"Data has been saved to {json_filename}")
+    print(f"{domain} has been processed")
+    print("------------------------------------------------")
 
 # Calls the function
 if __name__ == "__main__":
     tokens=8000
-    fillTable(tokens=tokens, question_data_path='qbank_by_domain/01_nq_closed_book.jsonl', domain='01_nq_closed_book', output_path=f'domain1_data_{tokens}.tsv')
+    results_8kfolder = f"results_{tokens}"
+    if not os.path.exists(results_8kfolder):
+        os.makedirs(results_8kfolder)
+
+    fillTable(tokens=tokens, question_data_path='qbank_by_domain/01_nq_closed_book.jsonl', domain='01_nq_closed_book', output_path=os.path.join(results_8kfolder, f'domain1_data_nq_closed_book_{tokens}.tsv'))
+    # fillTable(tokens=tokens, question_data_path='qbank_by_domain/02_hotpot_citation.jsonl', domain='02_hotpot_citation', output_path=os.path.join(results_8kfolder, f'domain2_data_hotpot_citation_{tokens}.tsv'))
+    # fillTable(tokens=tokens, question_data_path='qbank_by_domain/03_novelhop_multihop.jsonl', domain='03_novelhop_multihop', output_path=os.path.join(results_8kfolder, f'domain3_data_novelhop_multihop_{tokens}.tsv'))
+    # fillTable(tokens=tokens, question_data_path='qbank_by_domain/04_temporal_recency.jsonl', domain='04_temporal_recency', output_path=os.path.join(results_8kfolder, f'domain4_data_temporal_recency_{tokens}.tsv'))
+    # fillTable(tokens=tokens, question_data_path='qbank_by_domain/05_stackmath_numerical.jsonl', domain='05_stackmath_numerical', output_path=os.path.join(results_8kfolder, f'domain5_data_05_stackmath_numerical_{tokens}.tsv'))
+    # fillTable(tokens=tokens, question_data_path='qbank_by_domain/06_policy_compliance.jsonl', domain='06_policy_compliance', output_path=os.path.join(results_8kfolder, f'domain6_data_06_policy_compliance_{tokens}.tsv'))
+    # fillTable(tokens=tokens, question_data_path='qbank_by_domain/07_expert_legal_med.jsonl', domain='07_expert_legal_med', output_path=os.path.join(results_8kfolder, f'domain7_data_07_expert_legal_med_{tokens}.tsv'))
