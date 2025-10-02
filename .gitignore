@@ -6,3 +6,5 @@ data_prep/*.json
 data_prep/*.jsonl
 data_prep/*.csv
 data_prep/*.xlsx
+data_prep/qbank_by_domain/*
+results_*
