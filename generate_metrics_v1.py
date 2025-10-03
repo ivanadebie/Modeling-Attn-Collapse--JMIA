@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
-generate_metrics.py — Compute QA prompt/response metrics from a JSON dataset.
-
 Inputs
-------
 - JSON file with a list of rows. Expected (but flexible) fields:
   - 'prompt' (str): raw prompt that may include "Document [k]" sections.
   - 'question' (str): the question text (optional).
@@ -13,13 +10,11 @@ Inputs
   - 'row_index' (int): stable identifier for the item; if missing, index is used.
 
 Outputs
--------
 - run_level_metrics.csv
 - chunk_level_metrics.csv
 - metrics_output.xlsx (two sheets) if --excel is passed (default: true)
 
 Metrics (Run Level)
--------------------
 - run_id                               : stable row id (row['row_index'] if present else enumerate index)
 - num_distractors                      
 - distractor_ratio                      : distractor_tokens / (gold_tokens + distractor_tokens)
@@ -38,7 +33,6 @@ Metrics (Run Level)
 - interference_score_gpt, interference_type_gpt : placeholders; can be merged later from external evals
 
 Metrics (Chunk Level)
----------------------
 - run_id, chunk_idx, chunk_text
 - is_gold                               : 1 if chunk shares any token with gold_text
 - evidence_position                     : min distance to any gold chunk / (T-1)
@@ -46,7 +40,6 @@ Metrics (Chunk Level)
 - normalized_idx                        : chunk_idx / (T-1)
 
 Usage
------
 python generate_metrics.py /path/to/data.json --outdir ./out
 python generate_metrics.py /path/to/data.json --no-excel
 python generate_metrics.py /path/to/data.json --embeddings  # optional; requires 'sentence_transformers'
@@ -58,9 +51,7 @@ from typing import List, Dict, Any, Tuple, Set
 
 import pandas as pd
 
-# -------------------------
 # Text preprocessing utils
-# -------------------------
 _STOPWORDS = {
     "a","an","the","and","or","but","if","then","else","when","while","of","in","on","at","to","for","from","by","with",
     "without","between","among","over","under","into","through","as","is","are","was","were","be","been","being","have",
@@ -106,9 +97,7 @@ def jaccard(a: Set, b: Set) -> float:
     union = len(a | b)
     return float(inter) / union if union else 0.0
 
-# -------------------------
-# Field extraction heuristics
-# -------------------------
+# Field extraction
 def extract_gold_text(row: Dict[str, Any]) -> str:
     for key in ("gold_text","gold","gold_document","gold_doc","gold_passages","gold_source"):
         if key in row and row[key]:
@@ -150,9 +139,7 @@ def extract_distractors(row: Dict[str, Any]) -> List[str]:
     bad_terms = r"\b(pancake|unicorn|licorice|jellybean|giraffe|tapir|trampoline|marshmallow|waffle|spaghetti|corgi|zebra|pogo)\b"
     return [d for d in cands if re.search(bad_terms, canon(d))]
 
-# -------------------------
 # Span & position utilities
-# -------------------------
 def find_span(tokens: List[str], subseq: List[str]) -> Tuple[float, float]:
     if not tokens or not subseq:
         return (-1.0, -1.0)
@@ -172,9 +159,7 @@ def gold_position_from_span(start: float, end: float) -> str:
         return "end"
     return "middle"
 
-# -------------------------
-# Optional embedding similarity (if installed)
-# -------------------------
+# Optional embedding similarity
 def try_embedding_similarity(a: str, b: str, model_name: str = "all-MiniLM-L6-v2") -> float:
     try:
         from sentence_transformers import SentenceTransformer, util
@@ -192,9 +177,7 @@ def try_embedding_similarity(a: str, b: str, model_name: str = "all-MiniLM-L6-v2
     except Exception:
         return float("nan")
 
-# -------------------------
 # Chunking
-# -------------------------
 def split_into_chunks(prompt: str, max_subchunk_tokens: int = 64) -> List[str]:
     text = (prompt or "").strip()
     if not text:
@@ -218,9 +201,7 @@ def split_into_chunks(prompt: str, max_subchunk_tokens: int = 64) -> List[str]:
             subchunks.append(p)
     return subchunks
 
-# -------------------------
 # Core computations
-# -------------------------
 def compute_run_and_chunk_rows(rows: List[Dict[str, Any]], use_embeddings: bool=False, max_subchunk_tokens: int=64):
     run_rows = []
     chunk_rows = []
@@ -346,9 +327,7 @@ def compute_run_and_chunk_rows(rows: List[Dict[str, Any]], use_embeddings: bool=
 
     return run_rows, chunk_rows
 
-# -------------------------
 # Main
-# -------------------------
 def main():
     p = argparse.ArgumentParser()
     #p.add_argument("json_path", default=".", help="Path to input JSON (list of dicts).")
