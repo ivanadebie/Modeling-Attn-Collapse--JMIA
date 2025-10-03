@@ -27,28 +27,34 @@ def main():
     for i, row in df.iterrows():
         qa_id = str(row.get('Column 1', ''))
         prompt = row.get('Prompt', '')
+        question = row.get('Question', '')
+        gold_text = row.get('Gold Text', '')
+        distractor_1_text = row.get('Distractor 1 Text', '')
+        distractor_2_text = row.get('Distractor 2 Text', '')
         full_model_prompts.append(prompt)
 
-        # Extract only the context documents (remove instructions and question)
-        match = re.search(r'(Document \[1\][\s\S]*)', prompt)
-        context_part = match.group(1) if match else ""
-            
+
         record = QARecord(
-            qa_id=qa_id, 
-            context=context_part,  # Combined documents as context
-            prompt=prompt,       # Just the question text
-            answer=row.get('model_answer', ''),  # Use existing model answer
+            qa_id=qa_id,
+            prompt=prompt,
+            question=question,
+            gold_text=gold_text,
+            distractor_1_text=distractor_1_text,
+            distractor_2_text=distractor_2_text,
+            answer=row.get('model_answer', ''),
             distractor_density_class=row.get('Distractor Density Class', ''),
             interference_type=row.get('Interference Type', ''),
             evidence_position=row.get('Evidence Position', ''),
         )
         records.append(record)
 
+
     # Score Answers for Hallucination (using existing model answers)
     scorer = HallucinationScorer()
+    results = []
+
     for i, record in enumerate(tqdm(records, desc="Scoring Answers")):
         print(f"Processing question {i+1}/{len(records)}: {record.qa_id}")
-        
         # Use the stored full model prompt for generating consistency samples
         full_model_prompt = full_model_prompts[i]
 
@@ -58,7 +64,7 @@ def main():
             record.answer, full_model_prompt or record.prompt, MODEL_TO_USE, seed=i
         )
         print(f"Sentence-level scores: {sentence_level_hallu_scores}")
-        
+
         # Pass a seed for reproducible sample generation (i is a simple choice)
         sentence_level_hallu_scores = scorer.get_sentence_level_hallucination_scores(record.answer, record.context, MODEL_TO_USE, seed=i)
         # sample_level_hallu_scores = scorer.get_sample_level_hallucination_scores(full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
@@ -83,11 +89,25 @@ def main():
         # record.sample_level_hallu_scores = sample_level_hallu_scores['sample_level_hallucination_scores']
         # record.sample_level_95th_percentile = sample_level_95th_percentile
 
-        # Save intermediate results every 10 questions
-        if (i + 1) % 10 == 0:
-            print(f"Completed {i+1} questions, saving checkpoint...")
-            save_results_to_csv(records, OUTPUT_DATA_PATH)
-            print(f"Checkpoint saved to {OUTPUT_DATA_PATH}")
+        # New: For each sentence/chunk, add is_gold_binary and gold_text_chunk
+        gold_text_norm = record.gold_text.lower().strip()
+        for chunk, score in sentence_level_hallu_scores.get('sentence_level_hallucination_scores', {}).items():
+            chunk_norm = chunk.lower().strip()
+            is_gold_binary = int(chunk_norm == gold_text_norm)  # Simple string match; replace with semantic if needed
+            result = {
+                "qa_id": record.qa_id,
+                "chunk": chunk,
+                "score": score,
+                "is_gold_binary": is_gold_binary,
+                "gold_text_chunk": record.gold_text,
+                "hallucination_label": 1 if score >= 0.85 else 0,
+                "distractor_density_class": record.distractor_density_class,
+                "interference_type": record.interference_type,
+                "evidence_position": record.evidence_position
+            }
+            results.append(result)
+
+        # No intermediate chunk file output; only main results file will be written
 
     # Final save after completing all records
     save_results_to_csv(records, OUTPUT_DATA_PATH)

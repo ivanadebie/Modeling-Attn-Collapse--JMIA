@@ -9,17 +9,23 @@ class QARecord:
     qa_id: str
     context: str
     prompt: str
+    question: str = ""
+    gold_text: str = ""
+    distractor_1_text: str = ""
+    distractor_2_text: str = ""
     answer: str = ""
-    confidence: Dict[str, float] = None
-    model_response_uncertainty: float = 0.0
-    hallucination_label: int = 0
+    # confidence: Dict[str, float] = None
+    # model_response_uncertainty: float = 0.0
+    # hallucination_label: int = 0
     hallucination_score: float = 0.0
     sentence_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
-    sample_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
-    sample_level_95th_percentile: float = 0.0
+    # sample_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
+    # sample_level_95th_percentile: float = 0.0
     distractor_density_class: str = ""
     interference_type: str = ""
     evidence_position: str = ""
+    is_gold_binary: int = 0
+    gold_text_chunk: str = ""
 
 def normalize_text(text: str) -> str:
     """Lowercases, removes punctuation, and collapses whitespace."""

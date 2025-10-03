@@ -9,6 +9,26 @@ import llm_apihandler
 
 
 class HallucinationScorer:
+    def compute_semantic_similarity(self, chunk: str, gold_text: str, model_name: str = 'all-MiniLM-L6-v2') -> float:
+        """
+        Compute cosine similarity between chunk and gold_text using sentence-transformers.
+        Returns a float in [0, 1].
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+            from sklearn.metrics.pairwise import cosine_similarity
+        except ImportError:
+            raise ImportError("Please install sentence-transformers and scikit-learn for semantic similarity.")
+
+        # Load model (cache for efficiency)
+        if not hasattr(self, 'embedding_model'):
+            self.embedding_model = SentenceTransformer(model_name)
+
+        chunk_emb = self.embedding_model.encode([chunk], convert_to_tensor=True)
+        gold_emb = self.embedding_model.encode([gold_text], convert_to_tensor=True)
+        # Compute cosine similarity
+        sim = cosine_similarity(chunk_emb.cpu().numpy(), gold_emb.cpu().numpy())[0][0]
+        return float(sim)
     def __init__(self):
         """
         Initializes the scorer and the underlying SelfCheckGPT NLI model.
@@ -25,7 +45,7 @@ class HallucinationScorer:
             download("en_core_web_sm")
             self.nlp = spacy.load("en_core_web_sm")
 
-    def _generate_and_filter_samples(self, prompt: str, model_name: str, seed: int, min_samples: int = 20) -> List[str]:
+    def _generate_and_filter_samples(self, prompt: str, model_name: str, seed: int, min_samples: int = 10) -> List[str]:
         """
         Generate and filter consistency samples for hallucination detection.
         
@@ -41,8 +61,8 @@ class HallucinationScorer:
         samples = []
         
         try:
-            # Generate 20 samples from the same model for consistency
-            samples = llm_apihandler.generate_samples(prompt, model_name, num_samples=20, seed=seed)
+            # Generate 10 samples from the same model for consistency
+            samples = llm_apihandler.generate_samples(prompt, model_name, num_samples=10, seed=seed)
             # Simple filter for very short samples and deduplicate
             samples = [s for s in samples if len(s.split()) > 10]
             samples = deduplicate_samples(samples)
@@ -86,9 +106,6 @@ class HallucinationScorer:
             else:
                 sentences_to_check.append(s)
 
-        if not sentences_to_check:
-            return {}
-
         # 5. Run the NLI check for sentences/chunks
         contradiction_probabilities = self.selfcheck_nli.predict(
             sentences=sentences_to_check,
@@ -101,9 +118,7 @@ class HallucinationScorer:
             if contradiction_probability is not None:
                 sentence_level_scores[sentence] = max(0.0, min(1.0, float(contradiction_probability)))
 
-        if not sentence_level_scores:
-            return {}
-
+        print(f"[DEBUG] Final sentence-level hallucination scores: {sentence_level_scores}")
         return {
             'sentence_level_hallucination_scores': sentence_level_scores
         }
@@ -166,15 +181,15 @@ class HallucinationScorer:
         majority_vote = 1 if sum(scores) > len(scores) / 2 else 0  # Ties → 0 (explicit)
         return {'bin_majority': majority_vote}
 
-    def calculate_95th_percentile(self, scores_list):
-        """Calculate 95th percentile for a list of scores, filtering out None values."""
+    # def calculate_95th_percentile(self, scores_list):
+    #     """Calculate 95th percentile for a list of scores, filtering out None values."""
         
-        if not scores_list:
-            return 0.0
+    #     if not scores_list:
+    #         return 0.0
         
-        # Filter out None values and convert to numeric
-        valid_scores = [score for score in scores_list if score is not None]
-        if valid_scores:
-            return np.percentile(valid_scores, 95)
-        else:
-            return 0.0
+    #     # Filter out None values and convert to numeric
+    #     valid_scores = [score for score in scores_list if score is not None]
+    #     if valid_scores:
+    #         return np.percentile(valid_scores, 95)
+    #     else:
+    #         return 0.0

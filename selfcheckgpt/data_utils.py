@@ -9,8 +9,8 @@ def save_results_to_csv(records, output_path):
     for item in results_data:
 
         # Convert dictionaries to strings for CSV compatibility
-        item['confidence'] = str(item['confidence'])
+        # item['confidence'] = str(item['confidence'])
 
-    df_output = pd.DataFrame(results_data)
-    df_output.to_csv(output_path, index=False)
+        df_output = pd.DataFrame(results_data)
+        df_output.to_csv(output_path, index=False)
 

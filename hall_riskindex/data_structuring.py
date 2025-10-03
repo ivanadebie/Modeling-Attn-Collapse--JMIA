@@ -64,20 +64,3 @@ def structure_data(features: List[Dict[str, Any]], normalization: str = "zscore"
         "labels": hallucination_labels
     }
 
-# Example usage (replace with actual feature loading)
-if __name__ == "__main__":
-    from feature_calculation import calculate_features
-    chunks = ["Sentence 1", "Sentence 2", "Sentence 3"]
-    gold_chunks = ["Sentence 1"]
-    distractor_chunks = ["Distractor 1"]
-    model_responses = ["Model output 1", "Model output 2", "Model output 3"]
-    import numpy as np
-    attention_matrices = [np.zeros((12, 12, 64, 64)) for _ in chunks]
-    hallucination_labels = [0, 1, 0]
-    features = calculate_features(chunks, gold_chunks, distractor_chunks, model_responses, attention_matrices, hallucination_labels)
-    data = structure_data(features)
-    print("Raw matrix:", data["raw"])
-    print("Normalized:", data["normalized"])
-    print("Smoothed:", data["smoothed"])
-    print("PCA:", data["pca"])
-    print("Labels:", data["labels"])
