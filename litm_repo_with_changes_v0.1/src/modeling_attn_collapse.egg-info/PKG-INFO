@@ -165,3 +165,16 @@ python -u ./scripts/get_qa_responses_from_longchat.py \
   --batch-size 8 \
   --max-memory-per-gpu 10 \
   --closedbook
+  
+#1006
+
+
+python -u ./scripts/get_qa_responses_from_longchat.py \
+  --input-path qa_data/domain1_data_nq_closed_book_8000_converted.jsonl \
+  --model lmsys/longchat-13b-16k \
+  --output-path qa_predictions/domain1_data_nq_closed_book_8000_converted.output.gz \
+  --num-gpus 1 \
+  --max-new-tokens 20 \
+  --batch-size 8 \
+  --max-memory-per-gpu 10 \
+  --closedbook
