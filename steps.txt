@@ -9,3 +9,12 @@ conda activate myenv
 #pip install transformers accelerate sentencepiece safetensors einops "flash-attn>=2.3.6"
 #pip install vllm
 pip install transformers>=4.41.0 accelerate sentencepiece
+
+
+   14  pip install torch --index-url https://download.pytorch.org/whl/cu121
+   15  pip install transformers>=4.41.0 accelerate sentencepiece
+   16  ls
+   17  python mistral_exe.py 
+   18  pip install -U pip setuptools wheel
+   19  pip uninstall -y protobuf google || true
+   20  pip install "protobuf>=3.20,<6.0.0" sentencepiece             "transformers>=4.41" "tokenizers>=0.15" accelerate
