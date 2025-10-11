@@ -83,7 +83,8 @@ def main(
         for line in tqdm(fin):
             input_example = json.loads(line)
             # Get the prediction for the input example
-            question = input_example["question"]
+            prompt = input_example['prompt']
+            
             if closedbook:
                 documents = []
             else:
@@ -93,34 +94,36 @@ def main(
                 if not documents:
                     raise ValueError(f"Did not find any documents for example: {input_example}")
 
-            if use_random_ordering:
-                # Randomly order only the distractors (isgold is False), keeping isgold documents
-                # at their existing index.
-                (original_gold_index,) = [idx for idx, doc in enumerate(documents) if doc.isgold is True]
-                original_gold_document = documents[original_gold_index]
-                distractors = [doc for doc in documents if doc.isgold is False]
-                random.shuffle(distractors)
-                distractors.insert(original_gold_index, original_gold_document)
-                documents = distractors
+            # if use_random_ordering:
+            #     # Randomly order only the distractors (isgold is False), keeping isgold documents
+            #     # at their existing index.
+            #     (original_gold_index,) = [idx for idx, doc in enumerate(documents) if doc.isgold is True]
+            #     original_gold_document = documents[original_gold_index]
+            #     distractors = [doc for doc in documents if doc.isgold is False]
+            #     random.shuffle(distractors)
+            #     distractors.insert(original_gold_index, original_gold_document)
+            #     documents = distractors
 
-            if closedbook:
-                prompt = get_closedbook_qa_prompt(question)
-            else:
-                prompt = get_qa_prompt(
-                    question,
-                    documents,
-                    mention_random_ordering=prompt_mention_random_ordering,
-                    query_aware_contextualization=query_aware_contextualization,
-                )
+            # if closedbook:
+            #     prompt = get_closedbook_qa_prompt(question)
+            # else:
+            #     prompt = get_qa_prompt(
+            #         question,
+            #         documents,
+            #         mention_random_ordering=prompt_mention_random_ordering,
+            #         query_aware_contextualization=query_aware_contextualization,
+            #     )
 
             if "chat" in model_name:
                 if did_format_warn is False:
                     logger.warning(f"Model {model_name} appears to be an chat model, applying chat formatting")
                     did_format_warn = True
+
                 prompt = format_chat_prompt(prompt)
             prompts.append(prompt)
             examples.append(deepcopy(input_example))
             all_model_documents.append(documents)
+
 
     # Get responses for all of the prompts
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -169,6 +172,8 @@ def main(
                     )
                 )
             new_text = text[prompt_length:]
+            print("New text: ", new_text)
+            raise RuntimeError
             responses.append(new_text)
 
     with xopen(output_path, "w") as f:
