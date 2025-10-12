@@ -4,7 +4,7 @@ from typing import Any, List
 from data_requirements import QARecord, deduplicate_samples 
 import numpy as np
 
-from selfcheckgpt.modeling_selfcheck import SelfCheckNLI
+# from selfcheckgpt.modeling_selfcheck import SelfCheckNLI
 import llm_apihandler 
 
 
@@ -34,7 +34,7 @@ class HallucinationScorer:
         Initializes the scorer and the underlying SelfCheckGPT NLI model.
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.selfcheck_nli = SelfCheckNLI(device=self.device)
+        # self.selfcheck_nli = SelfCheckNLI(device=self.device)
         self.samples = []
         
         # Initialize spacy for sentence splitting (tokenization)
@@ -45,59 +45,59 @@ class HallucinationScorer:
             download("en_core_web_sm")
             self.nlp = spacy.load("en_core_web_sm")
 
-    def _generate_and_filter_samples(self, prompt: str, model_name: str, seed: int, min_samples: int = 10) -> List[str]:
-        """
-        Generate and filter consistency samples for hallucination detection.
+    # def _generate_and_filter_samples(self, prompt: str, model_name: str, seed: int, min_samples: int = 10) -> List[str]:
+    #     """
+    #     Generate and filter consistency samples for hallucination detection.
         
-        Args:
-            prompt: The full prompt (including context) that generated the answer.
-            model_name: The name of the model to use for generating consistency samples.
-            seed: An integer seed for reproducibility of samples.
-            min_samples: Minimum number of samples required (default: 10).
+    #     Args:
+    #         prompt: The full prompt (including context) that generated the answer.
+    #         model_name: The name of the model to use for generating consistency samples.
+    #         seed: An integer seed for reproducibility of samples.
+    #         min_samples: Minimum number of samples required (default: 10).
             
-        Returns:
-            A list of filtered and deduplicated samples, or empty list if insufficient samples.
-        """
-        samples = []
+    #     Returns:
+    #         A list of filtered and deduplicated samples, or empty list if insufficient samples.
+    #     """
+    #     samples = []
         
-        try:
-            # Generate 10 samples from the same model for consistency
-            samples = llm_apihandler.generate_samples(prompt, model_name, num_samples=10, seed=seed)
-            # Simple filter for very short samples and deduplicate
-            samples = [s for s in samples if len(s.split()) > 10]
-            samples = deduplicate_samples(samples)
-        except Exception:
-            return []
+    #     try:
+    #         # Generate 10 samples from the same model for consistency
+    #         samples = llm_apihandler.generate_samples(prompt, model_name, num_samples=10, seed=seed)
+    #         # Simple filter for very short samples and deduplicate
+    #         samples = [s for s in samples if len(s.split()) > 10]
+    #         samples = deduplicate_samples(samples)
+    #     except Exception:
+    #         return []
                 
-        return samples
+    #     return samples
 
 
-    def get_sentence_level_hallucination_scores(self, original_answer: str, prompt: str, model_name: str, seed: int) -> dict:
+    def get_sentence_level_hallucination_scores(self, original_answer: str, gold_text: str, model_name: str, seed: int) -> dict:
         """
         This function scores the answer for hallucination at the sentence level, defaulting to sentence steps, and falling back to ~64-token chunks for long/noisy sentences.
         Long sentences are those with word count > 80% of the average word count for all sentences in the answer.
         """
-        # 1. Generate self-consistency samples
-        self.samples = self._generate_and_filter_samples(prompt, model_name, seed)
-        if not self.samples:
-            return {}
+        # # 1. Generate self-consistency samples
+        # self.samples = self._generate_and_filter_samples(prompt, model_name, seed)
+        # if not self.samples:
+        #     return {}
 
         # 2. Sentence splitting
+
         doc = self.nlp(original_answer)
         sentences = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 5]
         if not sentences:
             return {}
 
-        # 3. Calculate average word count
+        # 2. Calculate average word count
         word_counts = [len(s.split()) for s in sentences]
         avg_word_count = np.mean(word_counts) if word_counts else 0
         threshold = 0.8 * avg_word_count
 
-        # 4. For long sentences, split into ~64-token chunks
+        # 3. For long sentences, split into ~64-token chunks
         sentences_to_check = []
         for s, wc in zip(sentences, word_counts):
             if wc > threshold:
-                # Split into ~64-token chunks
                 words = s.split()
                 for i in range(0, len(words), 64):
                     chunk = ' '.join(words[i:i+64])
@@ -106,19 +106,23 @@ class HallucinationScorer:
             else:
                 sentences_to_check.append(s)
 
-        # 5. Run the NLI check for sentences/chunks
-        contradiction_probabilities = self.selfcheck_nli.predict(
-            sentences=sentences_to_check,
-            sampled_passages=self.samples
-        )
+        # # 5. Run the NLI check for sentences/chunks
+        # contradiction_probabilities = self.selfcheck_nli.predict(
+        #     sentences=sentences_to_check,
+        #     sampled_passages=self.samples
+        # )
 
         # Map each sentence/chunk to its score, handling None from predict()
-        sentence_level_scores = {}
-        for sentence, contradiction_probability in zip(sentences_to_check, contradiction_probabilities):
-            if contradiction_probability is not None:
-                sentence_level_scores[sentence] = max(0.0, min(1.0, float(contradiction_probability)))
+        # sentence_level_scores = {}
+        # for sentence, contradiction_probability in zip(sentences_to_check, contradiction_probabilities):
+        #     if contradiction_probability is not None:
+        #         sentence_level_scores[sentence] = max(0.0, min(1.0, float(contradiction_probability)))
+        # 4. Compute cosine similarity for each sentence/chunk against gold_text
 
-        print(f"[DEBUG] Final sentence-level hallucination scores: {sentence_level_scores}")
+        sentence_level_scores = {}
+        for chunk in sentences_to_check:
+            score = self.compute_semantic_similarity(chunk, gold_text, model_name=model_name)
+            sentence_level_scores[chunk] = score
         return {
             'sentence_level_hallucination_scores': sentence_level_scores
         }

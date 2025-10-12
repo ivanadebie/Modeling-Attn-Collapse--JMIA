@@ -6,14 +6,16 @@ import string
 @dataclass
 class QARecord:
     """A class to hold all data for a single QA pair, with sentence-level scores."""
-    qa_id: str
-    context: str
-    prompt: str
+    question_id: str
+    model_prompt: str
+    config_idx: int = 0
+    domain: str = ""
+    config: str = ""
     question: str = ""
     gold_text: str = ""
-    distractor_1_text: str = ""
-    distractor_2_text: str = ""
-    answer: str = ""
+    distractors: str = ""
+    row_index: int = 0
+    model_answer: str = ""
     # confidence: Dict[str, float] = None
     # model_response_uncertainty: float = 0.0
     # hallucination_label: int = 0
@@ -21,9 +23,6 @@ class QARecord:
     sentence_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
     # sample_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
     # sample_level_95th_percentile: float = 0.0
-    distractor_density_class: str = ""
-    interference_type: str = ""
-    evidence_position: str = ""
     is_gold_binary: int = 0
     gold_text_chunk: str = ""
 
