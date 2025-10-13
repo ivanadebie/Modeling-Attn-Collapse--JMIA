@@ -8,13 +8,19 @@ conda activate myenv
   --index-url https://download.pytorch.org/whl/cu126
 #pip install transformers accelerate sentencepiece safetensors einops "flash-attn>=2.3.6"
 #pip install vllm
+#pip install "transformers>=4.41.0" accelerate sentencepiece
+
+
+pip install torch --index-url https://download.pytorch.org/whl/cu121
 pip install transformers>=4.41.0 accelerate sentencepiece
 
+#python mistral_exe.py 
+pip install -U pip setuptools wheel
+pip uninstall -y protobuf google || true
+pip install "protobuf>=3.20,<6.0.0" sentencepiece             "transformers>=4.41" "tokenizers>=0.15" accelerate
 
-   14  pip install torch --index-url https://download.pytorch.org/whl/cu121
-   15  pip install transformers>=4.41.0 accelerate sentencepiece
-   16  ls
-   17  python mistral_exe.py 
-   18  pip install -U pip setuptools wheel
-   19  pip uninstall -y protobuf google || true
-   20  pip install "protobuf>=3.20,<6.0.0" sentencepiece             "transformers>=4.41" "tokenizers>=0.15" accelerate
+
+python ./mistral/mistral_process.py \
+    --input-path ./litm_repo_with_changes_v0.1/qa_data/domain1_data_nq_closed_book_8000_converted.jsonl \
+    --output-path ./mistral/output/domain1_data_nq_closed_book_8000_converted.mistral.jsonl \
+    --max-new-tokens 1000
