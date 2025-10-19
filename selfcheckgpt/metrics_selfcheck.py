@@ -9,26 +9,16 @@ import llm_apihandler
 
 
 class HallucinationScorer:
-    def compute_semantic_similarity(self, chunk: str, gold_text: str, model_name: str = 'all-MiniLM-L6-v2') -> float:
+    def compute_semantic_similarity(self, chunk: str, gold_text: str, model_name: str = None) -> float:
         """
-        Compute cosine similarity between chunk and gold_text using sentence-transformers.
+        Compute semantic similarity between chunk and gold_text using spaCy's Doc.similarity.
         Returns a float in [0, 1].
         """
-        try:
-            from sentence_transformers import SentenceTransformer
-            from sklearn.metrics.pairwise import cosine_similarity
-        except ImportError:
-            raise ImportError("Please install sentence-transformers and scikit-learn for semantic similarity.")
-
-        # Load model (cache for efficiency)
-        if not hasattr(self, 'embedding_model'):
-            self.embedding_model = SentenceTransformer(model_name)
-
-        chunk_emb = self.embedding_model.encode([chunk], convert_to_tensor=True)
-        gold_emb = self.embedding_model.encode([gold_text], convert_to_tensor=True)
-        # Compute cosine similarity
-        sim = cosine_similarity(chunk_emb.cpu().numpy(), gold_emb.cpu().numpy())[0][0]
-        return float(sim)
+        chunk_doc = self.nlp(chunk)
+        gold_doc = self.nlp(gold_text)
+        sim = chunk_doc.similarity(gold_doc)
+        # Clamp to [0, 1] for consistency
+        return max(0.0, min(1.0, float(sim)))
     def __init__(self):
         """
         Initializes the scorer and the underlying SelfCheckGPT NLI model.
