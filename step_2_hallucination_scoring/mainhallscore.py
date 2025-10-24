@@ -6,9 +6,8 @@ from tqdm import tqdm
 from dataclasses import asdict
 import numpy as np
 import os
-# import llm_apihandler
-from data_requirements import QARecord # deduplicate_samples 
-from metrics_selfcheck import HallucinationScorer
+from data_requirements import QARecord 
+from metrics_hallscore import HallucinationScorer
 from data_utils import save_results_to_csv
 import json
 import csv
@@ -62,7 +61,6 @@ def main():
 
     for i, record in enumerate(tqdm(records, desc="Scoring Answers")):
         print(f"Processing question {i+1}/{len(records)}: {record.question_id}")
-        # Use the stored full model prompt for generating consistency samples
         # full_model_prompt = full_model_prompts[i]
 
         print(f"Answer: {record.model_answer!r}")
@@ -74,12 +72,12 @@ def main():
             continue
 
         # Use gold_text as the reference for semantic similarity scoring
-        sentence_level_hallu_scores = scorer.get_sentence_level_hallucination_scores(
+        sentence_level_hallu_scores = scorer.get_sentence_hallucination_scores(
             record.model_answer, record.gold_text, MODEL_TO_USE, seed=i
         )
         print(f"Sentence-level scores: {sentence_level_hallu_scores}")
-        # sample_level_hallu_scores = scorer.get_sample_level_hallucination_scores(full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
-        if not sentence_level_hallu_scores or not sentence_level_hallu_scores.get('sentence_level_hallucination_scores'):
+        # sample_level_hallu_scores = scorer.get_sample_level_sem_similarity_scores(full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
+        if not sentence_level_hallu_scores or not sentence_level_hallu_scores.get('sentence_level_hallu_scores'):
             print(f"[SKIP] No sentence/chunk scores produced for question_id {record.question_id}")
             continue
 
@@ -88,35 +86,24 @@ def main():
         # convert similarity -> hallucination likelihood: hallucination = 1 - similarity
         similarity_mean = whole_answer_hallu_score.get('conf_agg_mean', 0.0)
         hallucination_mean = 1.0 - similarity_mean
-        whole_answer_hallu_label = 1 if hallucination_mean >= 0.85 else 0  # 1-hallu / 0-not hallu
+        # whole_answer_hallu_label = 1 if hallucination_mean >= 0.85 else 0  # 1-hallu / 0-not hallu
 
-        # model_response_uncertainty = scorer.aggregate_confidence_scores(sample_level_hallu_scores)['conf_agg_mean']
-
-        # sample_level_95th_percentile = scorer.calculate_95th_percentile(
-        #     sample_level_hallu_scores.get('sample_level_hallucination_scores', [])
-        # )
-
-        record.hallucination_label = whole_answer_hallu_label
-        # store hallucination_score as a probability-like value where higher means more likely hallucination
         record.hallucination_score = hallucination_mean
-        # record.model_response_uncertainty = model_response_uncertainty
-        # record.confidence = 1 - model_response_uncertainty
-        if 'sentence_level_hallucination_scores' in sentence_level_hallu_scores:
-            record.sentence_level_hallu_scores = sentence_level_hallu_scores['sentence_level_hallucination_scores']
+
+        if 'sentence_level_hallu_scores' in sentence_level_hallu_scores:
+            record.sentence_level_hallu_scores = sentence_level_hallu_scores['sentence_level_hallu_scores']
         else:
             record.sentence_level_hallu_scores = {}
-        # record.sample_level_hallu_scores = sample_level_hallu_scores['sample_level_hallucination_scores']
-        # record.sample_level_95th_percentile = sample_level_95th_percentile
-        # Attach sentence-level scores to the record (if present)
-        if 'sentence_level_hallucination_scores' in sentence_level_hallu_scores:
-            record.sentence_level_hallu_scores = sentence_level_hallu_scores['sentence_level_hallucination_scores']
+
+        if 'sentence_level_hallu_scores' in sentence_level_hallu_scores:
+            record.sentence_level_hallu_scores = sentence_level_hallu_scores['sentence_level_hallu_scores']
         else:
             record.sentence_level_hallu_scores = {}
 
         # For each sentence/chunk, add is_gold_binary and gold_text_chunk
         gold_text_norm = record.gold_text.lower().strip()
         model_answer_norm = record.model_answer.lower()
-        chunk_scores = sentence_level_hallu_scores.get('sentence_level_hallucination_scores', {})
+        chunk_scores = sentence_level_hallu_scores.get('sentence_level_hallu_scores', {})
         chunk_gold_matches = {}
         matched_chunks = []
         for chunk, score in chunk_scores.items():
@@ -161,9 +148,9 @@ def main():
         canonical_fields = {k: _sanitize(v) for k, v in canonical_fields.items()}
         result.update(canonical_fields)
 
-        result["hallucination_score"] = record.hallucination_score
+        result["sem_similarity_score"] = record.sem_similarity_score
         result["hallucination_label"] = record.hallucination_label
-        result["sentence_level_hallu_scores"] = _sanitize(record.sentence_level_hallu_scores)
+        result["sentence_level_sem_similarity_scores"] = _sanitize(record.sentence_level_sem_similarity_scores)
         result["is_gold_binary"] = int(bool(matched_chunks))
         result["gold_text_chunk"] = _sanitize(matched_chunks)
         result["chunk_level_gold_matches"] = _sanitize(chunk_gold_matches)
@@ -182,14 +169,13 @@ def main():
         if not domain_group:
             print(f"No results for domain {domain}")
             continue
-        # Preserve column order from the original input row where possible.
         # Each domain_group item is a dict whose insertion order should reflect original input fields
         import pandas as pd
         df = pd.DataFrame(domain_group)
         # Determine preferred ordering: start with keys from the first row
         first_keys = list(domain_group[0].keys())
         # Common scoring columns we append at the end if present
-        scoring_cols = ["hallucination_score", "sentence_level_hallu_scores", "is_gold_binary", "gold_text_chunk"]
+        scoring_cols = ["sem_similarity_score", "sentence_level_sem_similarity_scores", "is_gold_binary", "gold_text_chunk"]
         final_cols = [k for k in first_keys if k not in scoring_cols]
         final_cols += [k for k in scoring_cols if k in df.columns and k not in final_cols]
         # Reindex dataframe to the final column order (will add missing cols as NaN)
@@ -206,12 +192,6 @@ def main():
 
         # Write CSV with quoting to avoid column-jumping from embedded separators/newlines
         df.to_csv(out_path, index=False, quoting=csv.QUOTE_ALL)
-        # Also write a JSONL with full sanitized content (one JSON per line) for exact downstream use
-        jsonl_out = os.path.splitext(out_path)[0] + '.jsonl'
-        with open(jsonl_out, 'w', encoding='utf-8') as jf:
-            for row in domain_group:
-                jf.write(json.dumps(row, ensure_ascii=False) + '\n')
-        print(f"Results saved to {out_path}")
 
 if __name__ == "__main__":
     main()

@@ -6,7 +6,22 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.decomposition import PCA
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Iterable
+
+METADATA_COLUMNS = {
+    "hallucination_label",
+    "sequence_id",
+    "chunk_index",
+    "sentence_text",
+    "hallu_signal",
+    "similarity_flag",
+    "lack_of_evidence_flag",
+    "config",
+    "question_id",
+    "domain",
+    "config_idx",
+    "row_index",
+}
 
 def features_to_matrix(features: List[Dict[str, Any]]) -> Tuple[np.ndarray, List[str]]:
     """
@@ -15,8 +30,14 @@ def features_to_matrix(features: List[Dict[str, Any]]) -> Tuple[np.ndarray, List
         X: np.ndarray of shape (T, D)
         feature_names: list of feature names
     """
-    feature_names = [k for k in features[0].keys() if k != "hallucination_label"]
-    X = np.array([[f[name] for name in feature_names] for f in features])
+    if not features:
+        raise ValueError("Feature list is empty; cannot build matrix.")
+    feature_names = [
+        key
+        for key in features[0].keys()
+        if key not in METADATA_COLUMNS
+    ]
+    X = np.array([[f[name] for name in feature_names] for f in features], dtype=float)
     return X, feature_names
 
 def normalize_features(X: np.ndarray, method: str = "zscore") -> np.ndarray:
@@ -42,6 +63,10 @@ def apply_pca(X: np.ndarray, n_components: int = 10) -> np.ndarray:
     """
     Apply PCA to reduce dimensionality of feature matrix.
     """
+    if X.size == 0:
+        return X
+    n_samples, n_features = X.shape
+    n_components = max(1, min(n_components, n_features, n_samples))
     pca = PCA(n_components=n_components)
     return pca.fit_transform(X)
 
