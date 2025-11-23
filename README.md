@@ -8,3 +8,7 @@ A40;
 RTX 5090;
 RTX 4090;
 L40S;
+
+
+longchat results are in qa_predictions under litm_repo_with_changes
+mistral results under mistral output
