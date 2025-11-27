@@ -1,27 +1,9 @@
-"""
-Data structuring for change point detection pipeline.
-Transforms feature dictionaries into matrices, normalizes, and applies smoothing/PCA.
-"""
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.decomposition import PCA
 from typing import List, Dict, Any, Tuple, Iterable
-
-METADATA_COLUMNS = {
-    "hallucination_label",
-    "sequence_id",
-    "chunk_index",
-    "sentence_text",
-    "hallu_signal",
-    "similarity_flag",
-    "lack_of_evidence_flag",
-    "config",
-    "question_id",
-    "domain",
-    "config_idx",
-    "row_index",
-}
+import re
 
 def features_to_matrix(features: List[Dict[str, Any]]) -> Tuple[np.ndarray, List[str]]:
     """
@@ -88,4 +70,3 @@ def structure_data(features: List[Dict[str, Any]], normalization: str = "zscore"
         "feature_names": feature_names,
         "labels": hallucination_labels
     }
-

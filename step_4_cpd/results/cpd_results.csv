@@ -1,4 +1,0 @@
-sequence_id,change_point,confidence
-seq_1,100,0.85
-seq_2,150,0.92
-seq_3,200,0.78

@@ -47,7 +47,7 @@ def main():
                     hallucination_score=0.0,
                     sentence_level_hallu_scores={},
                     is_gold_binary=0,
-                    gold_text_chunk='',
+                    evidence_position=0.0, #must fix for evidence posiiton; the gold text position is found then the difference between the 
                     domain=row.get('domain', ''),
                 )
                 # Keep the entire original input row so we can preserve all input headings/fields in outputs
@@ -100,7 +100,7 @@ def main():
         else:
             record.sentence_level_hallu_scores = {}
 
-        # For each sentence/chunk, add is_gold_binary and gold_text_chunk
+        # For each sentence/chunk, add is_gold_binary and evidence_position
         gold_text_norm = record.gold_text.lower().strip()
         model_answer_norm = record.model_answer.lower()
         chunk_scores = sentence_level_hallu_scores.get('sentence_level_hallu_scores', {})
@@ -112,6 +112,12 @@ def main():
             chunk_gold_matches[chunk] = is_match
             if is_match:
                 matched_chunks.append(chunk)
+        
+        if record.gold_text and record.model_prompt:
+            gold_position = record.model_prompt.lower().find(record.gold_text.lower())
+            if gold_position != -1:
+                record.evidence_position = gold_position
+        
 
         if hasattr(record, 'original_row') and isinstance(record.original_row, dict):
             result = dict(record.original_row)
@@ -152,7 +158,7 @@ def main():
         result["hallucination_label"] = record.hallucination_label
         result["sentence_level_sem_similarity_scores"] = _sanitize(record.sentence_level_sem_similarity_scores)
         result["is_gold_binary"] = int(bool(matched_chunks))
-        result["gold_text_chunk"] = _sanitize(matched_chunks)
+        result["evidence_position"] = record.evidence_position
         result["chunk_level_gold_matches"] = _sanitize(chunk_gold_matches)
         results.append(result)
 
@@ -175,7 +181,7 @@ def main():
         # Determine preferred ordering: start with keys from the first row
         first_keys = list(domain_group[0].keys())
         # Common scoring columns we append at the end if present
-        scoring_cols = ["sem_similarity_score", "sentence_level_sem_similarity_scores", "is_gold_binary", "gold_text_chunk"]
+        scoring_cols = ["sem_similarity_score", "sentence_level_sem_similarity_scores", "is_gold_binary", "evidence_position"]
         final_cols = [k for k in first_keys if k not in scoring_cols]
         final_cols += [k for k in scoring_cols if k in df.columns and k not in final_cols]
         # Reindex dataframe to the final column order (will add missing cols as NaN)

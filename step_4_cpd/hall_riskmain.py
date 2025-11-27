@@ -18,7 +18,7 @@ from step_4_cpd.change_pt_detection import (
     aggregate_results,
     plot_results,
 )
-from step_4_cpd.config_utils import add_config_columns, UNKNOWN_VALUE
+from dataset_prep_code.config_utils import add_config_columns, UNKNOWN_VALUE
 
 
 def parse_args() -> argparse.Namespace:

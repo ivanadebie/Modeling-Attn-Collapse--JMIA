@@ -4,10 +4,17 @@ Library of functions for calculating various metrics related to text quality,
 hallucination, and interference. Originally refactored from generate_metrics_v1.py.
 """
 
-import re, statistics, math
+import re, statistics, math, json
+import os
 from collections import Counter
 from typing import List, Dict, Any, Tuple, Set
 from tqdm import tqdm
+import pandas as pd
+
+try:
+    import openai
+except ImportError:
+    openai = None
 
 # Text preprocessing utils
 _STOPWORDS = {
@@ -145,6 +152,74 @@ def try_embedding_similarity(a: str, b: str, model_name: str = "all-MiniLM-L6-v2
         print(f"Error during embedding: {e}")
         return float("nan")
 
+# GPT-based interference scoring
+_OPENAI_CLIENT = None
+def get_gpt_interference_score(question: str, answer: str, distractors: List[str], model_name: str = "gpt-3.5-turbo") -> Tuple[float | None, str | None]:
+    """
+    Uses a GPT model to score the level of interference from distractors in an answer.
+    """
+    global _OPENAI_CLIENT
+    if openai is None:
+        # This check is mostly for type-hinting, the real check is in the calling function.
+        return None, None
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        # This check is also a safeguard.
+        return None, None
+
+    if not answer or not distractors:
+        return 0.0, "Nonsensical"
+
+    if _OPENAI_CLIENT is None:
+        _OPENAI_CLIENT = openai.OpenAI(api_key=api_key)
+
+    client = _OPENAI_CLIENT
+    distractor_text = "\n".join(f"- {d}" for d in distractors)
+
+    system_prompt = """
+You are an expert evaluator. Your task is to determine if a given 'Answer' to a 'Question' has been improperly influenced by 'Distractor Passages'.
+The 'Answer' should be based on general knowledge or the evidence provided in a prompt (which you cannot see), not the 'Distractor Passages'.
+Analyze the 'Answer' and determine the level of interference from the distractors.
+
+Respond with a JSON object containing two keys:
+1. "interference_score": A float between 0.0 (no interference) and 1.0 (heavy interference/plagiarism from distractors).
+2. "interference_type": A string, one of "Nonsensical", "Thematic", or "Paraphrased".
+   - "Nonsensical": The answer is irrelevant to the question, or the interference score is very low (< 0.15).
+   - "Thematic": The answer correctly addresses the question's topic but incorporates concepts or specific terms from the distractors.
+   - "Paraphrased": The answer directly copies or closely paraphrases sentences or phrases from the distractors.
+"""
+    user_prompt = f"""
+**Question:**
+{question}
+
+**Distractor Passages:**
+{distractor_text}
+
+**Answer:**
+{answer}
+
+**Evaluation (JSON response):**
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        score = float(result.get("interference_score", 0.0))
+        itype = str(result.get("interference_type", "Nonsensical"))
+        return score, itype
+    except Exception as e:
+        print(f"Error calling OpenAI API: {e}")
+        return None, None
+
 # Chunking
 def split_into_chunks(prompt: str, max_subchunk_tokens: int = 64) -> List[str]:
     text = (prompt or "").strip()
@@ -170,13 +245,26 @@ def split_into_chunks(prompt: str, max_subchunk_tokens: int = 64) -> List[str]:
     return subchunks
 
 # Core computations
-def compute_run_level_metrics(row: Dict[str, Any], use_embeddings: bool=True) -> Dict[str, Any]:
+def compute_run_level_metrics(row: Dict[str, Any], use_embeddings: bool=True, use_gpt_scoring: bool=False) -> Dict[str, Any]:
     """Computes run-level metrics for a single data row."""
     prompt = str(row.get("prompt") or row.get("Prompt") or "")
     question = str(row.get("question") or "")
     gold_text = str(extract_gold_text(row) or "")
     distractors = extract_distractors(row)
     model_answer = str(row.get("model_answer") or row.get("response") or row.get("answer") or "")
+
+    # Return early if key fields are missing to avoid errors
+    if not model_answer or not gold_text:
+        # Return a dictionary with default/None values for all keys
+        return {
+            "distractor_density": "low",
+            "gold_span_start": -1.0, "gold_span_end": -1.0, "gold_position": "unknown",
+            "total_response_tokens": 0, "interference_token_hits": 0,
+            "interference_score_lexical": 0.0, "interference_type_lexical": "Nonsensical",
+            "evid_overlap_ngram": 0.0, "response_alignment": 0.0, "hallu_score": 0.0,
+            "hallu_label": "Low", "evid_overlap_emb": None, "interference_score_gpt": None,
+            "interference_type_gpt": None, "att_avg_entropy": None
+        }
 
     # Token bags
     gold_tokens = tokenize(gold_text) if gold_text else []
@@ -235,9 +323,12 @@ def compute_run_level_metrics(row: Dict[str, Any], use_embeddings: bool=True) ->
     # Optional embedding similarity
     evid_overlap_emb = try_embedding_similarity(model_answer, gold_text) if use_embeddings else float("nan")
 
+    # Optional GPT-based interference scoring
+    interference_score_gpt, interference_type_gpt = None, None
+    if use_gpt_scoring:
+        interference_score_gpt, interference_type_gpt = get_gpt_interference_score(question, model_answer, distractors)
+
     return {
-        "num_distractors": num_distractors,
-        "distractor_ratio": round(distractor_ratio, 6),
         "distractor_density": distractor_density,
         "gold_span_start": gold_span_start,
         "gold_span_end": gold_span_end,
@@ -252,11 +343,9 @@ def compute_run_level_metrics(row: Dict[str, Any], use_embeddings: bool=True) ->
         "hallu_label": hallu_label,
         "evid_overlap_emb": round(evid_overlap_emb, 6) if isinstance(evid_overlap_emb, float) and not math.isnan(evid_overlap_emb) else None,
         # Placeholders for external/advanced metrics
-        "interference_score_gpt": None,
-        "interference_type_gpt": None,
+        "interference_score_gpt": interference_score_gpt,
+        "interference_type_gpt": interference_type_gpt,
         "att_avg_entropy": None,
-        "att_std_entropy": None,
-        "att_avg_effective_rank": None,
     }
 
 def compute_chunk_level_metrics(row: Dict[str, Any], max_subchunk_tokens: int=64) -> List[Dict[str, Any]]:
@@ -296,7 +385,7 @@ def compute_chunk_level_metrics(row: Dict[str, Any], max_subchunk_tokens: int=64
         })
     return chunk_rows
 
-def compute_metrics_for_dataset(rows: List[Dict[str, Any]], use_embeddings: bool=True, max_subchunk_tokens: int=64):
+def compute_metrics_for_dataset(rows: List[Dict[str, Any]], use_embeddings: bool=True, use_gpt_scoring: bool=False, max_subchunk_tokens: int=64):
     """
     Takes a list of data rows (dicts) and computes run-level and chunk-level metrics for the whole dataset.
     """
@@ -307,7 +396,7 @@ def compute_metrics_for_dataset(rows: List[Dict[str, Any]], use_embeddings: bool
         if "row_index" not in row:
             row["row_index"] = idx
         
-        run_metrics = compute_run_level_metrics(row, use_embeddings=use_embeddings)
+        run_metrics = compute_run_level_metrics(row, use_embeddings=use_embeddings, use_gpt_scoring=use_gpt_scoring)
         run_metrics["run_id"] = row["row_index"]
         all_run_metrics.append(run_metrics)
 
@@ -315,3 +404,77 @@ def compute_metrics_for_dataset(rows: List[Dict[str, Any]], use_embeddings: bool
         all_chunk_metrics.extend(chunk_metrics)
         
     return all_run_metrics, all_chunk_metrics
+
+def calculate_chunk_level_features(row: pd.Series) -> pd.Series:
+    """
+    Calculates all required features for a single chunk (sentence).
+    This is designed to be used with df.apply.
+    """
+    # Ensure gold_text and distractors are lists of strings
+    gold_text_list = row.get('gold_text', [])
+    if isinstance(gold_text_list, str):
+        gold_text_list = [gold_text_list]
+    
+    distractors_list = row.get('distractors', [])
+    if isinstance(distractors_list, str):
+        distractors_list = [distractors_list]
+
+    gold_text_full = " ".join(gold_text_list)
+    distractors_full = " ".join(distractors_list)
+    
+    sentence = row['sentence_text']
+
+    # is_gold_binary: Check for semantic overlap with any gold sentence
+    is_gold_binary = 0
+    if gold_text_full and sentence:
+        # A simple string-based check
+        if sentence.lower() in gold_text_full.lower():
+            is_gold_binary = 1
+        else:
+            # A more robust n-gram check
+            sent_ngrams = ngram_set(preprocess_tokens(sentence, drop_stop=True), 2)
+            gold_ngrams = ngram_set(preprocess_tokens(gold_text_full, drop_stop=True), 2)
+            if jaccard(sent_ngrams, gold_ngrams) > 0.2: # Threshold for semantic match
+                is_gold_binary = 1
+    
+    # evidence_position: Calculated later, requires view of all chunks
+    # This will be calculated in the main script after grouping.
+    
+    # distractor_density_chunk
+    sent_tokens = set(tokenize(sentence))
+    distractor_tokens = set(tokenize(distractors_full))
+    distractor_density_chunk = len(sent_tokens.intersection(distractor_tokens)) / len(sent_tokens) if sent_tokens else 0
+
+    # evidence_overlap_ratio (ngram-based)
+    evidence_overlap_ratio = jaccard(
+        ngram_set(preprocess_tokens(sentence), 3),
+        ngram_set(preprocess_tokens(gold_text_full), 3)
+    )
+
+    # interference_score_lexical for the chunk
+    interference_token_hits = len(sent_tokens.intersection(distractor_tokens))
+    total_chunk_tokens = len(sent_tokens)
+    interference_score_lexical_wrt_distractors = interference_token_hits / total_chunk_tokens if total_chunk_tokens > 0 else 0
+
+    # interference_type_lexical
+    if interference_score_lexical_wrt_distractors < 0.15:
+        interference_type_lexical_wrt_distractors = "Nonsensical"
+    elif interference_score_lexical_wrt_distractors < 0.5:
+        interference_type_lexical_wrt_distractors = "Thematic"
+    else:
+        interference_type_lexical = "Paraphrased"
+        
+    # model_response_alignment_score (semantic similarity between chunk and gold)
+    # Using embedding similarity as a proxy for this
+    model_response_alignment_score = try_embedding_similarity(sentence, gold_text_full)
+
+    # normalized_chunk_index: Calculated later, requires view of all chunks
+
+    return pd.Series({
+        'is_gold_binary': is_gold_binary,
+        'distractor_density_chunk': distractor_density_chunk,
+        'evidence_overlap_ratio': evidence_overlap_ratio,
+        'interference_score_lexical': interference_score_lexical_wrt_distractors,
+        'interference_type_lexical': interference_type_lexical_wrt_distractors,
+        'model_response_alignment_score': model_response_alignment_score,
+    })
