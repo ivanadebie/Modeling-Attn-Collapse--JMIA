@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from step_4_cpd.change_pt_detection import (
+from cpd_code.change_pt_detection import (
     get_all_sequence_files,
     load_features_from_csv,
     plot_advanced_visualizations,
@@ -18,7 +18,7 @@ from step_4_cpd.change_pt_detection import (
     aggregate_results,
     plot_results,
 )
-from step_4_cpd.analysis_utils import add_config_columns, UNKNOWN_VALUE
+from cpd_code.analysis_utils import add_config_columns, UNKNOWN_VALUE
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,25 +29,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data_dir",
         type=str,
-        default="step_4_cpd/prepared_dataset_cpd.csv",
-        help="Directory or file containing the input data (default: step_4_cpd/prepared_dataset_cpd.csv).",
+        default="../dataset_prep_code/prepared_dataset_cpd.csv",
+        help="Directory or file containing the input data (default: ../dataset_prep_code/prepared_dataset_cpd.csv).",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="step_4_cpd/output",
-        help="Directory where the output results will be saved (default: step_4_cpd/output).",
+        default="../output",
+        help="Directory where the output results will be saved (default: ../output).",
     )
     parser.add_argument(
         "--config",
         type=str,
         default="",
         help="Configuration string for selecting specific sequences.",
-    )
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Overwrite existing results if any.",
     )
     return parser.parse_args()
 
@@ -62,11 +57,11 @@ def main():
         data_dir=args.data_dir,
         output_dir=args.output_dir,
         config=args.config,
-        overwrite=args.overwrite,
+        overwrite=True,  # Always overwrite
     )
 
     # Step 2: Plot the CPD results
-    aggregated_summary_path = Path(args.output_dir) / "aggregated_summary_combined.csv"
+    aggregated_summary_path = Path(args.output_dir) / "aggregated_summary.csv"
     if aggregated_summary_path.exists():
         aggregated_df = pd.read_csv(aggregated_summary_path)
         plot_results(aggregated_df, args.output_dir)
