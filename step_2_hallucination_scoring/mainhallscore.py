@@ -11,21 +11,63 @@ from metrics_hallscore import HallucinationScorer
 from data_utils import save_results_to_csv
 import json
 import csv
+import argparse
 
-INPUT_JSONL_FILES = [
-    os.path.join(os.path.dirname(__file__), 'domain1_data_nq_closed_book_8000_converted.output.jsonl'),
-    os.path.join(os.path.dirname(__file__), 'domain2_data_hotpot_citation_8000_converted.output.jsonl'),
-    os.path.join(os.path.dirname(__file__), 'domain3_data_novelhop_multihop_8000_converted.output.jsonl'),
-    os.path.join(os.path.dirname(__file__), 'domain4_data_temporal_recency_8000_converted.output.jsonl'),
-    os.path.join(os.path.dirname(__file__), 'domain5_data_05_stackmath_numerical_8000_converted.output.jsonl'),
-    os.path.join(os.path.dirname(__file__), 'domain6_data_06_policy_compliance_8000_converted.output.jsonl'),
-    os.path.join(os.path.dirname(__file__), 'domain7_data_07_expert_legal_med_8000_converted.output.jsonl'),
-]
-OUTPUT_DATA_PATH = os.path.join(os.path.dirname(__file__), 'answer_hallu_scored.csv')
 MODEL_TO_USE = "all-MiniLM-L6-v2"
 
+def get_input_files(model_type):
+    """Get input JSONL files based on model type (longchat or mistral)."""
+    base_dir = os.path.dirname(__file__)
+    
+    if model_type == 'longchat':
+        folder = os.path.join(base_dir, 'model answers_longchat')
+        file_patterns = [
+            'domain1_data_nq_closed_book_8000_converted.output.jsonl',
+            'domain2_data_hotpot_citation_8000_converted.output.jsonl',
+            'domain3_data_novelhop_multihop_8000_converted.output.jsonl',
+            'domain4_data_temporal_recency_8000_converted.output.jsonl',
+            'domain5_data_05_stackmath_numerical_8000_converted.output.jsonl',
+            'domain6_data_06_policy_compliance_8000_converted.output.jsonl',
+            'domain7_data_07_expert_legal_med_8000_converted.output.jsonl',
+        ]
+    elif model_type == 'mistral':
+        folder = os.path.join(base_dir, 'model answers_mistral')
+        file_patterns = [
+            'domain1_data_nq_closed_book_8000_converted.mistral.jsonl',
+            'domain2_data_hotpot_citation_8000_converted.mistral.jsonl',
+            'domain3_data_novelhop_multihop_8000_converted.mistral.jsonl',
+            'domain4_data_temporal_recency_8000_converted.mistral.jsonl',
+            'domain5_data_05_stackmath_numerical_8000_converted.mistral.jsonl',
+            'domain6_data_06_policy_compliance_8000_converted.mistral.jsonl',
+            'domain7_data_07_expert_legal_med_8000_converted.mistral.jsonl',
+        ]
+    else:
+        raise ValueError(f"Unknown model type: {model_type}. Use 'longchat' or 'mistral'.")
+    
+    return [os.path.join(folder, pattern) for pattern in file_patterns]
 
-def main():
+def get_output_folder(model_type):
+    """Get output folder based on model type."""
+    base_dir = os.path.dirname(__file__)
+    if model_type == 'longchat':
+        return os.path.join(base_dir, 'scored answers_longchat')
+    elif model_type == 'mistral':
+        return os.path.join(base_dir, 'scored answers_mistral')
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
+
+def main(model_type):
+    # Get input files and output folder based on model type
+    INPUT_JSONL_FILES = get_input_files(model_type)
+    output_folder = get_output_folder(model_type)
+    
+    # Create output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+    
+    print(f"Processing {model_type} model answers...")
+    print(f"Input files: {len(INPUT_JSONL_FILES)} domains")
+    print(f"Output folder: {output_folder}")
+    
     # Load data from JSONL files and create initial records
     import json
     records = []
@@ -72,12 +114,12 @@ def main():
             continue
 
         # Use gold_text as the reference for semantic similarity scoring
-        sentence_level_hallu_scores = scorer.get_sentence_hallucination_scores(
+        sentence_level_hallu_scores = scorer.get_sentence_level_sem_similarity_scores(
             record.model_answer, record.gold_text, MODEL_TO_USE, seed=i
         )
         print(f"Sentence-level scores: {sentence_level_hallu_scores}")
         # sample_level_hallu_scores = scorer.get_sample_level_sem_similarity_scores(full_model_prompt or record.prompt, MODEL_TO_USE, seed=i)
-        if not sentence_level_hallu_scores or not sentence_level_hallu_scores.get('sentence_level_hallu_scores'):
+        if not sentence_level_hallu_scores or not sentence_level_hallu_scores.get('sentence_level_sem_similarity_scores'):
             print(f"[SKIP] No sentence/chunk scores produced for question_id {record.question_id}")
             continue
 
@@ -89,21 +131,18 @@ def main():
         # whole_answer_hallu_label = 1 if hallucination_mean >= 0.85 else 0  # 1-hallu / 0-not hallu
 
         record.hallucination_score = hallucination_mean
+        record.sem_similarity_score = similarity_mean
+        record.hallucination_label = 1 if hallucination_mean >= 0.5 else 0
 
-        if 'sentence_level_hallu_scores' in sentence_level_hallu_scores:
-            record.sentence_level_hallu_scores = sentence_level_hallu_scores['sentence_level_hallu_scores']
+        if 'sentence_level_sem_similarity_scores' in sentence_level_hallu_scores:
+            record.sentence_level_sem_similarity_scores = sentence_level_hallu_scores['sentence_level_sem_similarity_scores']
         else:
-            record.sentence_level_hallu_scores = {}
-
-        if 'sentence_level_hallu_scores' in sentence_level_hallu_scores:
-            record.sentence_level_hallu_scores = sentence_level_hallu_scores['sentence_level_hallu_scores']
-        else:
-            record.sentence_level_hallu_scores = {}
+            record.sentence_level_sem_similarity_scores = {}
 
         # For each sentence/chunk, add is_gold_binary and evidence_position
         gold_text_norm = record.gold_text.lower().strip()
         model_answer_norm = record.model_answer.lower()
-        chunk_scores = sentence_level_hallu_scores.get('sentence_level_hallu_scores', {})
+        chunk_scores = sentence_level_hallu_scores.get('sentence_level_sem_similarity_scores', {})
         chunk_gold_matches = {}
         matched_chunks = []
         for chunk, score in chunk_scores.items():
@@ -171,7 +210,7 @@ def main():
 
     for domain, domain_group in domain_results.items():
         domain_str = str(domain).replace(' ', '_')
-        out_path = os.path.join(os.path.dirname(__file__), f'answer_hallu_scored_{domain_str}.csv')
+        out_path = os.path.join(output_folder, f'answer_hallu_scored_{domain_str}.csv')
         if not domain_group:
             print(f"No results for domain {domain}")
             continue
@@ -198,6 +237,12 @@ def main():
 
         # Write CSV with quoting to avoid column-jumping from embedded separators/newlines
         df.to_csv(out_path, index=False, quoting=csv.QUOTE_ALL)
+        print(f"Saved results for domain {domain} to {out_path}")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='Score hallucinations in model answers')
+    parser.add_argument('--model', type=str, required=True, choices=['longchat', 'mistral'],
+                        help='Model type to process: longchat or mistral')
+    
+    args = parser.parse_args()
+    main(args.model)

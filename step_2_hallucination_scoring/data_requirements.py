@@ -12,6 +12,7 @@ class QARecord:
     domain: str = ""
     config: str = ""
     question: str = ""
+    gold_text: str = ""
     evidence_position: float = 0.0
     distractors: str = ""
     row_index: int = 0
@@ -24,7 +25,9 @@ class QARecord:
     # sample_level_hallu_scores: Dict[str, float] = field(default_factory=dict)
     # sample_level_95th_percentile: float = 0.0
     is_gold_binary: int = 0
-    evidence_position: float = 0.0
+    sem_similarity_score: float = 0.0
+    hallucination_label: int = 0
+    sentence_level_sem_similarity_scores: Dict[str, float] = field(default_factory=dict)
 
 def normalize_text(text: str) -> str:
     """Lowercases, removes punctuation, and collapses whitespace."""
