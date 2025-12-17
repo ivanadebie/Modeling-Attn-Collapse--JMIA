@@ -1,9 +1,3 @@
-feature,status,num_sequences,avg_chunks_per_seq,avg_detections,min_detections,max_detections,sequences_with_detections,pct_with_detections
-hallu_score,success,30,4.3,0.13333333333333333,0,1,4,13.333333333333334
-distractor_density_chunk,success,30,4.3,0.03333333333333333,0,1,1,3.3333333333333335
-evidence_overlap_ratio,success,30,4.3,0.0,0,0,0,0.0
-interference_score_lexical_wrt_distractors,success,30,4.3,0.03333333333333333,0,1,1,3.3333333333333335
-evidence_position,success,30,4.3,0.13333333333333333,0,1,4,13.333333333333334
-att_avg_entropy,success,30,4.3,0.0,0,0,0,0.0
-cross_attention_mass_to_gold,success,30,4.3,0.0,0,0,0,0.0
-distractor_attention_max,success,30,4.3,0.0,0,0,0,0.0
+version https://git-lfs.github.com/spec/v1
+oid sha256:11e021382604fbaebbcca09dce9c36b9c25df6cfe4c1a431afdcb7ec70b41d24
+size 695
