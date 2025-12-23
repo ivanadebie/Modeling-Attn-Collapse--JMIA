@@ -2,3 +2,5 @@ pandas
 tiktoken
 torch
 transformers
+huggingface_hub
+accelerate
