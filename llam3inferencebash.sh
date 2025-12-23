@@ -7,6 +7,7 @@ echo "uploading git repo"
 python3 -m venv atharv_env
 source atharv_env/bin/activate
 pip3 install -r requirements_atharv.txt
+python3 -c "from  huggingface_hub import login; login()"
 echo "Installing libs"
 echo " run llama3 code"
 python3 llama3.py --input-path domain1_data_nq_closed_book_8000.jsonl --output-path domain1_llama3.1-8b_model_responses.jsonl --max-new-tokens 1000
