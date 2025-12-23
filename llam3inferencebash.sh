@@ -3,6 +3,7 @@ echo " Starting code testing"
 git clone -b Atharv https://github.com/ivanadebie/Modeling-Attn-Collapse--JMIA.git
 cd Modeling-Attn-Collapse--JMIA
 echo "uploading git repo"
+#execute the following commands 1by1 in GPU jupyer's terminal
 python3 -m venv atharv_env
 source atharv_env/bin/activate
 pip3 install -r requirements_atharv.txt
