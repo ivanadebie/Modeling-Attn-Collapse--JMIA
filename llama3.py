@@ -30,15 +30,19 @@ def process_qa_file(input_path: str, output_path: str, max_new_tokens: int):
         for line_index, line in enumerate(infile):
             try:
                 # 1. Load the single JSON record
-                payload = json.loads(line)
+                for line_index, line in enumerate(infile):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    payload = json.loads(line)
                 
                 # We assume the task is closed-book QA, using only the question
-                question = payload["prompt"]
+                #question = payload["prompt"]
 
                 # 2. Format the prompt using the LLama-3-Instruct chat template
                 messages = [
-                    {"role": "system", "content": "You are a pirate chatbot who always responds in pirate speak!"},
-                    {"role": "user", "content": "Who are you?"},
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question},
                 ]
                 
                 # Apply the chat template and add the special generation prompt token
