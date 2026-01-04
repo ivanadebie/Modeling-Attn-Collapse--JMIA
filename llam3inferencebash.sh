@@ -7,6 +7,7 @@ echo "uploading git repo"
 python3 -m venv atharv_env
 source atharv_env/bin/activate
 pip3 install -r requirements_atharv.txt
+git config --global credential.helper store
 python3 -c "from  huggingface_hub import login; login()"
 echo "Installing libs"
 echo " run llama3 code"
