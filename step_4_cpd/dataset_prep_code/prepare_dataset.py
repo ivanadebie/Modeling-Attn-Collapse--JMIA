@@ -187,22 +187,7 @@ def calculate_chunk_level_features(df: pd.DataFrame) -> pd.DataFrame:
         
         # Embedding overlap (chunk vs full gold text)
         evid_overlap_emb = try_embedding_similarity(chunk, row['full_gold_text'])
-
-        # hallu_score
-        grounding_vocab = set(tokenize(row['question'])) | set(tokenize(row['full_gold_text']))
-        hallu_oov = sum(1 for t in chunk_token_set if t not in grounding_vocab)
-        hallu_score = (hallu_oov / len(chunk_token_set)) if chunk_token_set else 0.0
-        
-        # Other metrics now at chunk level
-        total_response_tokens = len(chunk_tokens)
-        distractor_vocab = set(preprocess_tokens(row.get('full_distractor_text', '')))
-        interference_token_hits = sum(1 for t in chunk_token_set if t in distractor_vocab)
-
-        return pd.Series([
-            is_gold_binary, interference_score, evid_overlap_ngram, evid_overlap_emb, hallu_score,
-            total_response_tokens, interference_token_hits
-        ])
-
+                        
     tqdm.pandas(desc="Calculating chunk features")
     df[[
         'is_gold_binary', 'interference_score_lexical_wrt_distractors', 

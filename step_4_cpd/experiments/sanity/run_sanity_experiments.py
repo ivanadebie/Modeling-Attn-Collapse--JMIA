@@ -124,6 +124,11 @@ def smooth_signal(signal: np.ndarray, window: int = 3) -> np.ndarray:
     return uniform_filter1d(signal, size=window, mode='nearest')
 
 
+def apply_ewma(signal: np.ndarray, alpha: float = 0.3) -> np.ndarray:
+    """Apply Exponential Weighted Moving Average smoothing."""
+    return pd.Series(signal).ewm(alpha=alpha, adjust=False).mean().values
+
+
 def run_cpd_on_feature(
     df: pd.DataFrame,
     feature_name: str,
@@ -178,16 +183,17 @@ def run_cpd_on_feature(
             seq_df = seq_df.sort_values('chunk_index').reset_index(drop=True)
         
         # Extract feature signal
-        signal = seq_df[feature_name].values
+        signal = seq_df[[feature_name]].copy()
         
-        # Handle NaN
-        signal = np.nan_to_num(signal, nan=0.0)
+        # Handle NaN with forward-fill
+        signal = signal.fillna(method='ffill').fillna(method='bfill').values.flatten()
         
         if len(signal) < min_size:
             continue
         
-        # Normalize and smooth
+        # Normalize, apply EWMA smoothing, then smooth further
         signal = normalize_signal(signal)
+        signal = apply_ewma(signal, alpha=0.3)
         signal = smooth_signal(signal, window=3)
         
         # Reshape for PELT
@@ -249,7 +255,7 @@ def main():
     parser.add_argument(
         "--data_file",
         type=str,
-        default="../dataset_prep_code/prepared_dataset_cpd.csv",
+        default=r"c:\Users\ivana\OneDrive\Documents\Modeling-Attn-Collapse--JMIA\step_4_cpd\dataset_prep_code\prepared_dataset_cpd_with_attn_metrics_FINAL.csv",
         help="Path to prepared dataset CSV"
     )
     parser.add_argument(
@@ -319,7 +325,6 @@ def main():
     
     # Define features to test
     features_to_test = [
-        'hallu_score',
         'distractor_density_chunk',
         'evidence_overlap_ratio',  # Can also try 'evid_overlap_emb'
         'interference_score_lexical_wrt_distractors',
