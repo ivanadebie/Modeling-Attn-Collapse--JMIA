@@ -164,6 +164,7 @@ def calculate_chunk_level_features(df: pd.DataFrame) -> pd.DataFrame:
         chunk = row['model_answer_chunk']
         chunk_tokens = tokenize(chunk)
         chunk_token_set = set(chunk_tokens)
+        total_response_tokens = len(chunk_tokens)
         
         # is_gold_binary (more robust check)
         gold_text_full = row['full_gold_text']
@@ -187,6 +188,19 @@ def calculate_chunk_level_features(df: pd.DataFrame) -> pd.DataFrame:
         
         # Embedding overlap (chunk vs full gold text)
         evid_overlap_emb = try_embedding_similarity(chunk, row['full_gold_text'])
+        
+        # hallu_score from input data
+        hallu_score = row.get('hallu_score', np.nan)
+        
+        return pd.Series([
+            is_gold_binary, 
+            interference_score,
+            evid_overlap_ngram, 
+            evid_overlap_emb, 
+            hallu_score,
+            total_response_tokens, 
+            interference_hits
+        ])
                         
     tqdm.pandas(desc="Calculating chunk features")
     df[[
@@ -331,28 +345,94 @@ def finalize_and_save(df: pd.DataFrame, output_file: str):
 # MAIN EXECUTION
 # ==============================================================================
 
+DOMAIN_MAPPING = {
+    "1": {
+        "name": "nq_closed_book",
+        "file": "step_2_hallucination_scoring/scored answers_longchat/answer_hallu_scored_01_nq_closed_book.csv"
+    },
+    "2": {
+        "name": "hotpot_citation",
+        "file": "step_2_hallucination_scoring/scored answers_longchat/answer_hallu_scored_02_hotpot_citation.csv"
+    },
+    "3": {
+        "name": "novelhop_multihop",
+        "file": "step_2_hallucination_scoring/scored answers_longchat/answer_hallu_scored_03_novelhop_multihop.csv"
+    },
+    "4": {
+        "name": "temporal_recency",
+        "file": "step_2_hallucination_scoring/scored answers_longchat/answer_hallu_scored_04_temporal_recency.csv"
+    },
+    "5": {
+        "name": "stackmath_numerical",
+        "file": "step_2_hallucination_scoring/scored answers_longchat/answer_hallu_scored_05_stackmath_numerical.csv"
+    },
+    "6": {
+        "name": "policy_compliance",
+        "file": "step_2_hallucination_scoring/scored answers_longchat/answer_hallu_scored_06_policy_compliance.csv"
+    },
+    "7": {
+        "name": "expert_legal_med",
+        "file": "step_2_hallucination_scoring/scored answers_longchat/answer_hallu_scored_07_expert_legal_med.csv"
+    },
+}
+
 def main():
     """Main pipeline for preparing the change-point detection dataset."""
-    # --- Configuration ---
-    input_files = [
-        "step_4_cpd/scored_answers/answer_hallu_scored_01_nq_closed_book.csv",
-        "step_4_cpd/scored_answers/answer_hallu_scored_02_hotpot_citation.csv",
-        "step_4_cpd/scored_answers/answer_hallu_scored_03_novelhop_multihop.csv",
-        "step_4_cpd/scored_answers/answer_hallu_scored_04_temporal_recency.csv",
-        "step_4_cpd/scored_answers/answer_hallu_scored_05_stackmath_numerical.csv",
-        "step_4_cpd/scored_answers/answer_hallu_scored_06_policy_compliance.csv",
-        "step_4_cpd/scored_answers/answer_hallu_scored_07_expert_legal_med.csv",
-    ]
-    output_file = "step_4_cpd/prepared_dataset_cpd.csv"
+    parser = argparse.ArgumentParser(description="Prepare domain-specific CPD dataset.")
+    parser.add_argument(
+        "--domain",
+        type=str,
+        required=True,
+        help="Domain number (1-7) or 'all' to process all domains. "
+             "1=nq_closed_book, 2=hotpot_citation, 3=novelhop_multihop, "
+             "4=temporal_recency, 5=stackmath_numerical, 6=policy_compliance, 7=expert_legal_med"
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="step_4_cpd",
+        help="Output directory for prepared datasets (default: step_4_cpd)"
+    )
     
-    # --- Pipeline ---
-    base_df = load_and_prepare_data(input_files)
-    chunked_df = create_chunk_df(base_df)
-    # All feature calculations are now performed on the chunked dataframe
-    features_df = calculate_chunk_level_features(chunked_df)
-    positional_df = calculate_positional_features(features_df)
-    normalized_df = normalize_features(positional_df)
-    finalize_and_save(normalized_df, output_file)
+    args = parser.parse_args()
+    
+    # Determine which domains to process
+    if args.domain.lower() == "all":
+        domains_to_process = list(DOMAIN_MAPPING.keys())
+    else:
+        if args.domain not in DOMAIN_MAPPING:
+            print(f"Error: Invalid domain '{args.domain}'. Must be 1-7 or 'all'.")
+            sys.exit(1)
+        domains_to_process = [args.domain]
+    
+    # Process each domain
+    for domain_id in domains_to_process:
+        domain_info = DOMAIN_MAPPING[domain_id]
+        domain_name = domain_info["name"]
+        input_file = domain_info["file"]
+        
+        print(f"\n{'='*80}")
+        print(f"Processing Domain {domain_id}: {domain_name}")
+        print(f"{'='*80}")
+        
+        # Check if input file exists
+        if not Path(input_file).exists():
+            print(f"Warning: Input file not found: {input_file}. Skipping domain {domain_id}.")
+            continue
+        
+        output_file = Path(args.output_dir) / f"prepared_dataset_cpd_domain{domain_id}_{domain_name}.csv"
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # --- Pipeline ---
+        base_df = load_and_prepare_data([input_file])
+        chunked_df = create_chunk_df(base_df)
+        # All feature calculations are now performed on the chunked dataframe
+        features_df = calculate_chunk_level_features(chunked_df)
+        positional_df = calculate_positional_features(features_df)
+        normalized_df = normalize_features(positional_df)
+        finalize_and_save(normalized_df, str(output_file))
+        
+        print(f"Successfully completed Domain {domain_id}.\n")
 
 if __name__ == "__main__":
     main()
