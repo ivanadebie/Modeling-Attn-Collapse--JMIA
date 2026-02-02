@@ -1,4 +1,15 @@
+"""
+Core modules for CPD experiments.
+
+This package contains the core functionality for:
+- Attention extraction (attention_extraction.py)
+- CPD algorithms (cpd_algorithms.py)
+- Feature engineering (feature_engineering.py)
+- Data merging (data_merging.py)
+"""
+
 from .attention_extraction import AttentionExtractor, concat_gold_chunks
+from .cpd_algorithms import safe_pelt, safe_kernel_cpd
 from .feature_engineering import (
     add_sentence_index,
     add_ewma_features,
@@ -11,20 +22,26 @@ from .feature_engineering import (
     extract_window_features,
     extract_jump_features
 )
-from .cpd_algorithms import (
-    safe_pelt,
-    safe_kernel_cpd,
-    safe_binseg,
-    safe_window,
-    create_cpd_function,
-    CPDRunner
+from .data_merging import (
+    load_and_merge_all,
+    load_main_dataset,
+    load_sentence_attention,
+    merge_datasets,
+    add_sentence_index,
+    validate_merge,
+    get_merge_info
 )
 
 __all__ = [
-    # attention extraction
+    # Attention extraction
     "AttentionExtractor",
     "concat_gold_chunks",
-    # feature engineering
+    
+    # CPD algorithms
+    "safe_pelt",
+    "safe_kernel_cpd",
+    
+    # Feature engineering
     "add_sentence_index",
     "add_ewma_features",
     "add_delta_features",
@@ -35,11 +52,12 @@ __all__ = [
     "engineer_all_features",
     "extract_window_features",
     "extract_jump_features",
-    # cpd algorithms
-    "safe_pelt",
-    "safe_kernel_cpd",
-    "safe_binseg",
-    "safe_window",
-    "create_cpd_function",
-    "CPDRunner"
+    
+    # Data merging
+    "load_and_merge_all",
+    "load_main_dataset",
+    "load_sentence_attention",
+    "merge_datasets",
+    "validate_merge",
+    "get_merge_info",
 ]
