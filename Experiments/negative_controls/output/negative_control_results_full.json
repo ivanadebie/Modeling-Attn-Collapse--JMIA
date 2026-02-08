@@ -1,0 +1,76 @@
+[
+  {
+    "experiment": "Baseline_L1_CPD",
+    "description": "Standard L1 cost PELT CPD (reference baseline)",
+    "sequences": 100,
+    "precision": 0.012076722708974662,
+    "recall": 0.51,
+    "f1": 0.02359472588480222,
+    "tp": 51,
+    "fp": 4172,
+    "fn": 49
+  },
+  {
+    "experiment": "E1_RBF_Kernel",
+    "description": "Standard CPD with RBF kernel (standard params)",
+    "sequences": 100,
+    "precision": 0.010027347310847767,
+    "recall": 0.11,
+    "f1": 0.018379281537176273,
+    "tp": 11,
+    "fp": 1086,
+    "fn": 89
+  },
+  {
+    "experiment": "E2_CPD_Classifier",
+    "description": "CPD candidates + Random Forest classifier validation",
+    "sequences": 50,
+    "precision": 0.02021276595744681,
+    "recall": 0.38,
+    "f1": 0.03838383838383839,
+    "tp": 19,
+    "fp": 921,
+    "fn": 31
+  },
+  {
+    "experiment": "E3_NoHallu_Check",
+    "description": "Check for sequences without hallucinations",
+    "total_sequences": 133,
+    "sequences_with_hallu": "133",
+    "sequences_without_hallu": "0",
+    "has_no_hallu_sequences": "False",
+    "recommendation": "Need to prepare model responses without distractor content"
+  },
+  {
+    "experiment": "E4_Random_Baseline",
+    "description": "Random change point selection (10 trials)",
+    "n_trials": 10,
+    "sequences": 100,
+    "avg_precision": 0.042239177664820236,
+    "avg_recall": 0.08299999999999999,
+    "avg_f1": 0.05594264783213604,
+    "std_f1": 0.021827464813841253
+  },
+  {
+    "experiment": "E5_Within_Shuffle",
+    "description": "Feature values shuffled within each sequence (break temporal structure)",
+    "sequences": 100,
+    "precision": 0.014636343165953613,
+    "recall": 0.65,
+    "f1": 0.02862805549438449,
+    "tp": 65,
+    "fp": 4376,
+    "fn": 35
+  },
+  {
+    "experiment": "E6_Across_Shuffle",
+    "description": "Feature time series swapped between sequences (mismatched signal-label pairs)",
+    "sequences": 100,
+    "precision": 0.012313521193464362,
+    "recall": 0.52,
+    "f1": 0.024057367568817947,
+    "tp": 52,
+    "fp": 4171,
+    "fn": 48
+  }
+]

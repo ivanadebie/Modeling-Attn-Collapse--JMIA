@@ -1,0 +1,7 @@
+Experiment,Description,Sequences,Precision,Recall,F1
+Baseline_L1_CPD,Standard L1 cost PELT CPD (reference baseline),100,0.012076722708974662,0.51,0.02359472588480222
+E1_RBF_Kernel,Standard CPD with RBF kernel (standard params),100,0.010027347310847767,0.11,0.018379281537176273
+E2_CPD_Classifier,CPD candidates + Random Forest classifier validation,50,0.02021276595744681,0.38,0.03838383838383839
+E3_NoHallu_Check,Check for sequences without hallucinations,133,N/A,N/A,No-hallu seqs: 0
+E5_Within_Shuffle,Feature values shuffled within each sequence (break temporal structure),100,0.014636343165953613,0.65,0.02862805549438449
+E6_Across_Shuffle,Feature time series swapped between sequences (mismatched signal-label pairs),100,0.012313521193464362,0.52,0.024057367568817947
