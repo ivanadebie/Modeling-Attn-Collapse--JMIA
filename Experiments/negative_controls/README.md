@@ -1,79 +1,191 @@
-## How to Run
+# Negative Control Experiments for CPD Hallucination Detection
 
-### Quick Start (10% Sample)
+This directory contains negative control experiments to validate the Change Point Detection (CPD) approach for detecting hallucinations in LLM outputs.
+
+## Overview
+
+These experiments test whether the CPD method is genuinely detecting hallucination boundaries or if the results could be explained by simpler baselines or artifacts.
+
+### Experiment Matrix
+
+The experiments run a full matrix of **3 models × 5 experiment types = 15 combinations**.
+
+| Model | Description |
+|-------|-------------|
+| `CPD_RBF` | Standard CPD with RBF kernel |
+| `CPD+RF` | CPD + Random Forest classifier |
+| `CPD+LR` | CPD + Logistic Regression classifier |
+
+| Experiment Type | Subtype | Description |
+|-----------------|---------|-------------|
+| `baseline` | `standard_cpd` | Standard CPD without manipulation (reference) |
+| `feature_shuffle` | `within_sequence` | Shuffle features within each sequence to break temporal structure |
+| `feature_shuffle` | `across_sequence` | Swap feature time series between different sequences |
+| `no_hallucination` | `gold_only` | Run CPD on sequences without hallucinations |
+| `random_cp` | `random_selection` | Select random change points as baseline comparison |
+
+---
+
+## Prerequisites
+
+### 1. Install Dependencies
 
 ```bash
-cd Modeling-Attn-Collapse--JMIA/Experiments/negative_controls
-python3 run_negative_controls.py
+pip3 install ruptures scikit-learn scipy pandas numpy
 ```
 
-### Full Dataset (Slower, More Accurate)
+### 2. Pull Data Files (Git LFS)
 
-Edit `run_negative_controls.py` line 475:
-
-```python
-# Change from:
-df = load_data(sample_frac=0.1)
-
-# To:
-df = load_data(sample_frac=1.0)
-```
-
-Then run:
+The dataset files are stored in Git LFS. Pull them before running:
 
 ```bash
-python3 run_negative_controls.py
+cd /path/to/Modeling-Attn-Collapse--JMIA
+git lfs install
+git lfs pull
+```
+
+### 3. Verify Data
+
+```bash
+# Check that data file is not just an LFS pointer
+head -1 step_4_cpd/dataset_prep_code/prepared_dataset_cpd_with_attn_metrics_FINAL.csv
+# Should show column headers, NOT "version https://git-lfs.github.com/spec/v1"
 ```
 
 ---
 
-## Experiments
+## Directory Structure
 
-### Baseline: Standard L1 CPD
-- **Description**: Reference baseline using PELT algorithm with L1 cost
-- **Parameters**: `model="l1"`, `penalty=1.0`, `min_size=2`
+```
+negative_controls/
+├── README.md                      # This file
+├── run_negative_controls.py       # Main experiment runner
+├── prepare_no_hallu_data.py       # Prepare no-hallucination data
+├── output/                        # Experiment results
+│   ├── negative_control_results.csv
+│   └── negative_control_results_full.json
+└── no_hallu_data/                 # No-hallucination experiment data
+    ├── domain1_no_hallu_prompts.jsonl
+    ├── domain1_no_hallu_prompts.csv
+    └── run_inference.py
+```
+
+---
+
+## How to Run
+
+### Quick Start
+
+```bash
+# From project root directory
+cd /path/to/Modeling-Attn-Collapse--JMIA
+
+# Run all negative control experiments
+python step_4_cpd/experiments/negative_controls/run_negative_controls.py
+```
+
+### Full Process (Including No-Hallucination Data)
+
+#### Step 1: Run Main Experiments
+
+```bash
+python step_4_cpd/experiments/negative_controls/run_negative_controls.py
+```
+
+This runs all experiment combinations except "no_hallucination" (which requires additional data).
+
+#### Step 2: Prepare No-Hallucination Data
+
+```bash
+python step_4_cpd/experiments/negative_controls/prepare_no_hallu_data.py
+```
+
+This creates prompts using only `gold_text` (no distractors) for domain1.
+
+**Output:**
+- `no_hallu_data/domain1_no_hallu_prompts.jsonl` - Prompts for inference
+- `no_hallu_data/domain1_no_hallu_prompts.csv` - Reference CSV
+- `no_hallu_data/run_inference.py` - Inference script
+
+#### Step 3: Run Model Inference (Requires GPU)
+
+```bash
+# Requires: transformers, torch, GPU
+python step_4_cpd/experiments/negative_controls/no_hallu_data/run_inference.py
+```
+
+This generates LongChat-13B responses for the gold-only prompts.
+
+#### Step 4: Score and Integrate
+
+After inference:
+1. Score responses using hallucination scoring pipeline
+2. Process through CPD data preparation
+3. Re-run experiments
+
+---
+
+## Configuration
+
+Edit `EXPERIMENT_CONFIG` in `run_negative_controls.py`:
+
+```python
+EXPERIMENT_CONFIG = {
+    'sample_frac': 0.1,      # Data sampling fraction (0.1 = 10%)
+    'max_seqs': 100,         # Max sequences per experiment
+    'n_random_trials': 10,   # Trials for random baseline
+    'max_train_seqs': 50,    # Sequences for classifier training
+}
+```
+
+### Full Dataset (Slower, More Accurate)
+
+```python
+EXPERIMENT_CONFIG = {
+    'sample_frac': 1.0,      # Use full dataset
+    'max_seqs': 500,         # More sequences
+    'n_random_trials': 20,   # More random trials
+    'max_train_seqs': 100,   # More training data
+}
+```
+
+---
+
+## Experiments Detail
+
+### Baseline: Standard CPD
+- **Type:Subtype**: `baseline:standard_cpd`
+- **Description**: Reference baseline using PELT algorithm with RBF kernel
 - **Purpose**: Establish reference performance for comparison
 
-### Experiment 1: RBF Kernel CPD
-- **Description**: Standard CPD with Radial Basis Function kernel
-- **Parameters**: `model="rbf"`, `penalty=1.0`
-- **Purpose**: Test alternative kernel performance
-- **Expected**: Compare RBF vs L1 cost models
-
-### Experiment 2: CPD + Classifier
-- **Description**: Hybrid approach combining CPD with Random Forest classifier
-- **Method**:
-  1. Split data: 50% training, 50% testing
-  2. Train classifier on chunk-level features to predict change points
-  3. CPD generates candidate CPs (low penalty=0.5)
-  4. Classifier validates/filters candidates
-- **Purpose**: Test if post-hoc filtering improves precision
-
-### Experiment 3: No-Hallucination Sequences Check
-- **Description**: Check if sequences without any hallucinations exist
-- **Method**: Filter sequences where `max(hallu_label) == 0`
-- **Purpose**: Identify data for true negative control
-- **Finding**: Current dataset has 0 no-hallucination sequences
-
-### Experiment 4: Random CP Baseline
-- **Description**: Randomly select change points and compare with ground truth
-- **Method**:
-  - Generate 1-3 random CPs per sequence
-  - Run 10 trials and average results
-- **Purpose**: Establish random chance baseline
-- **Expected**: CPD should significantly outperform random
-
-### Experiment 5: Within-Sequence Feature Shuffling
+### Feature Shuffle - Within Sequence
+- **Type:Subtype**: `feature_shuffle:within_sequence`
 - **Description**: Shuffle feature values within each sequence
 - **Method**: For each feature column, randomly permute values within the sequence
 - **Purpose**: Break temporal structure while preserving feature distributions
-- **Expected**: If CPD relies on temporal patterns, F1 should drop significantly
+- **Expected**: If CPD relies on temporal patterns, F1 should DROP significantly
 
-### Experiment 6: Across-Sequence Feature Shuffling
+### Feature Shuffle - Across Sequence
+- **Type:Subtype**: `feature_shuffle:across_sequence`
 - **Description**: Swap feature time series between different sequences
 - **Method**: Use features from sequence A with ground truth labels from sequence B
 - **Purpose**: Test if features are sequence-specific
-- **Expected**: If features correlate with specific sequences, F1 should drop
+- **Expected**: If features correlate with specific sequences, F1 should DROP
+
+### No Hallucination Sequences
+- **Type:Subtype**: `no_hallucination:gold_only`
+- **Description**: Run CPD on sequences without any hallucinations
+- **Method**: Use model responses generated with only gold_text (no distractors)
+- **Purpose**: Test false positive rate on known-clean sequences
+- **Expected**: Should detect NO change points (low FP rate)
+- **Status**: Requires data preparation (see Step 2-4 above)
+
+### Random CP Baseline
+- **Type:Subtype**: `random_cp:random_selection`
+- **Description**: Randomly select change points and compare with ground truth
+- **Method**: Generate 1-3 random CPs per sequence, run 10 trials
+- **Purpose**: Establish random chance baseline
+- **Expected**: CPD should significantly OUTPERFORM random
 
 ---
 
@@ -81,61 +193,65 @@ python3 run_negative_controls.py
 
 ### Location
 ```
-Experiments/negative_controls/output/
+step_4_cpd/experiments/negative_controls/output/
 ```
 
-### Files Generated
-
-| File | Description |
-|------|-------------|
-| `negative_control_results.csv` | Summary table with metrics per experiment |
-| `negative_control_results_full.json` | Full results with all parameters and details |
-
-### CSV Columns
+### CSV Output (negative_control_results.csv)
 
 | Column | Description |
 |--------|-------------|
-| `Experiment` | Experiment identifier |
-| `Description` | Brief description of the experiment |
+| `Model` | Model name (CPD_RBF, CPD+RF, CPD+LR) |
+| `Experiment` | Experiment name |
+| `Exp_Type` | Experiment type tag |
+| `Exp_Subtype` | Experiment subtype tag |
+| `Status` | success/error/skipped |
 | `Sequences` | Number of sequences processed |
-| `Precision` | True positives / (True positives + False positives) |
-| `Recall` | True positives / (True positives + False negatives) |
-| `F1` | Harmonic mean of precision and recall |
+| `Precision` | Detection precision |
+| `Recall` | Detection recall |
+| `F1` | F1 score |
+| `FP_Rate` | False positive rate (for no-hallu only) |
+| `Error` | Error message if failed |
 
----
+### JSON Output (negative_control_results_full.json)
 
-## Output Summary
-
-### Expected Results Table
-
-| Experiment | F1 Score | vs Baseline | Interpretation |
-|------------|----------|-------------|----------------|
-| Baseline_L1_CPD | ~0.024 | - | Reference |
-| E1_RBF_Kernel | ~0.018 | -22% | L1 better than RBF |
-| E2_CPD_Classifier | ~0.038 | +63% | Hybrid approach helps |
-| E4_Random_Baseline | ~0.056 | +137% | Random is competitive (warning) |
-| E5_Within_Shuffle | ~0.029 | +21% | Temporal structure not critical |
-| E6_Across_Shuffle | ~0.024 | +2% | Features not sequence-specific |
-
-### Interpretation Guide
-
-**Good Signs:**
-- RBF kernel performs worse than L1 (confirms L1 choice)
-- CPD + Classifier improves over baseline (hybrid approach viable)
-
-**Warning Signs:**
-- Random baseline competitive with CPD (method may not extract much signal)
-- Shuffling experiments don't show significant F1 drop (temporal structure may not matter)
-
-**Action Required:**
-- No sequences without hallucinations exist
-- Need to prepare model responses WITHOUT distractor content for true negative control
+```json
+{
+  "metadata": {
+    "experiment_name": "Negative Control Experiments...",
+    "feature_set": "best_raw_features",
+    "features": ["..."],
+    "models": ["CPD_RBF", "CPD+RF", "CPD+LR"],
+    "experiment_types": {
+      "baseline": {"standard_cpd": "..."},
+      "feature_shuffle": {"within_sequence": "...", "across_sequence": "..."},
+      "no_hallucination": {"gold_only": "..."},
+      "random_cp": {"random_selection": "..."}
+    },
+    "config": {...}
+  },
+  "results": [
+    {
+      "model": "CPD_RBF",
+      "experiment": "Baseline",
+      "experiment_type": "baseline",
+      "experiment_subtype": "standard_cpd",
+      "feature_set": "best_raw_features",
+      "features_used": ["..."],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.01,
+      "recall": 0.11,
+      "f1": 0.018
+    }
+  ]
+}
+```
 
 ---
 
 ## Features Used
 
-The experiments use the best raw feature set:
+The experiments use the best raw feature set from E5 experiments:
 
 ```python
 BEST_FEATURES = [
@@ -167,15 +283,69 @@ Recall = TP / (TP + FN)
 F1 = 2 * Precision * Recall / (Precision + Recall)
 ```
 
+---
 
-## File Structure
+## Interpreting Results
 
+### Expected Outcomes
+
+| Experiment | Expected Result | Good Sign |
+|------------|-----------------|-----------|
+| Feature Shuffle (within) | F1 drops significantly | Temporal structure matters |
+| Feature Shuffle (across) | F1 drops significantly | Sequence-specific patterns exist |
+| No Hallucination | Low FP rate (<0.5) | Model doesn't over-detect |
+| Random CP | F1 much lower than baseline | CPD adds value over random |
+
+### Warning Signs
+
+- **Shuffle F1 doesn't drop**: Method may not rely on temporal structure
+- **Random baseline competitive**: CPD may not add significant value
+- **High FP rate on no-hallu**: Model over-detects change points
+
+---
+
+## Code Details
+
+### run_negative_controls.py
+
+**Main Components:**
+
+1. **Model Classes**
+   - `CPDModel`: Standard CPD using ruptures library with RBF kernel
+   - `CPDClassifierModel`: Hybrid CPD + classifier (RF or LR)
+
+2. **Experiment Functions**
+   - `exp_baseline()`: Standard CPD detection
+   - `exp_within_sequence_shuffle()`: Shuffle features within sequences
+   - `exp_across_sequence_shuffle()`: Swap features between sequences
+   - `exp_no_hallucination_sequences()`: Test on no-hallu sequences
+   - `exp_random_cp_baseline()`: Random change point selection
+
+3. **Result Tags**
+   - `model`: CPD_RBF, CPD+RF, CPD+LR
+   - `experiment_type`: baseline, feature_shuffle, no_hallucination, random_cp
+   - `experiment_subtype`: standard_cpd, within_sequence, across_sequence, gold_only, random_selection
+
+### prepare_no_hallu_data.py
+
+**Purpose:** Create prompts with only gold_text (no distractors) to generate model responses that should NOT contain hallucinations.
+
+**Prompt Format:**
 ```
-negative_controls/
-├── README.md                      # This file
-├── run_negative_controls.py       # Main experiment script
-└── output/
-    ├── negative_control_results.csv        # Summary results
-    └── negative_control_results_full.json  # Full results
+A chat between a curious user and an artificial intelligence assistant...
+USER: Question: {question}
+Answer the question using the document below:
+
+Document [1]
+{gold_text}
+
+A:
 ```
 
+---
+
+## Related Files
+
+- **Data preparation**: `step_4_cpd/dataset_prep_code/prepare_dataset.py`
+- **Main CPD experiments**: `step_4_cpd/experiments/experiments_e1_e5/`
+- **Hallucination scoring**: `step_2_hallucination_scoring/`
