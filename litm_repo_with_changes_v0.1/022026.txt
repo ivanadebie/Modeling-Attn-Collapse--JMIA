@@ -1,0 +1,41 @@
+ubuntu@129-213-87-225:~/Modeling-Attn-Collapse--JMIA/litm_repo_with_changes_v0.1
+
+sed -i 's|longchat@git+https://github.com/DachengLi1/LongChat.git@43d71f03d7711a2ab3b78ee8d1e38b65bb7fd22f|longchat==0.1.0|g' requirements.txt
+
+rm -rf src/modeling_attn_collapse.egg-info
+
+pip install -e .
+
+## failed ,then
+pip install pybind11 ninja packaging
+pip cache purge
+pip install -e .
+
+== try
+pip install flash-attn --no-build-isolation
+sudo pip install -e .
+
+# 1. Create a virtual environment named 'venv'
+python3 -m venv venv
+
+# 2. Activate the environment
+source venv/bin/activate
+
+# 3. Run your installation again (no sudo needed!)
+pip install -e .
+
+
+#Fix
+pip install "numpy<2"
+pip uninstall flash-attn -y
+pip install flash-attn --no-build-isolation --no-cache-dir
+
+
+pip install wheel setuptools packaging ninja
+pip install flash-attn --no-build-isolation --no-cache-dir
+
+
+##
+pip install bitsandbytes accelerate
+
+
