@@ -1,0 +1,56 @@
+## 0221 gpu_1x_h100_pcie settings
+
+# 1. Create a virtual environment named 'venv'
+python3 -m venv venv
+
+# 2. Activate the environment
+source venv/bin/activate
+
+sudo  apt-get update
+sudo  apt-get install cmake zlib1g-dev
+cd litm_repo_with_changes_v0.1/
+pip install -e .
+
+#example
+python -u ./scripts/get_qa_responses_from_longchat_ori.py \
+  --input-path qa_data/domain4_data_temporal_recency_8000_converted.jsonl \
+  --model lmsys/longchat-13b-16k \
+  --output-path qa_predictions/domain4_data_temporal_recency_8000_converted.output.jsonl.gz \
+  --num-gpus 2 \
+  --max-new-tokens 1000 \
+  --batch-size 4 \
+  --max-memory-per-gpu 50 \
+  --closedbook  
+#modified
+python -u ./scripts/get_qa_responses_from_longchat_ori.py \
+  --input-path qa_data/domain4_data_temporal_recency_8000_converted.jsonl \
+  --model lmsys/longchat-13b-16k \
+  --output-path qa_predictions_tmp/domain4_data_temporal_recency_8000_converted.output.jsonl.gz \
+  --num-gpus 1 \
+  --max-new-tokens 1000 \
+  --batch-size 4 \
+  --max-memory-per-gpu 80 \
+  --closedbook  
+#trial
+python -u ./scripts/get_qa_responses_from_longchat_ori.py \
+  --input-path qa_data/domain4_data_temporal_recency_8000_converted.jsonl \
+  --model lmsys/longchat-13b-16k \
+  --output-path qa_predictions_tmp/domain4_data_temporal_recency_8000_converted.output.jsonl.gz \
+  --num-gpus 1 \
+  --max-new-tokens 1000 \
+  --batch-size 1 \
+  --max-memory-per-gpu 80 \
+  --closedbook  
+
+
+python -u ./scripts/get_qa_responses_from_longchat_ori.py \
+  --input-path qa_data/domain1_data_nq_closed_book_8000_converted_no_diatractor.jsonl.gz \
+  --model lmsys/longchat-13b-16k \
+  --output-path qa_predictions/domain1_data_nq_closed_book_8000_converted_no_diatractor.output.jsonl.gz \
+  --num-gpus 1 \
+  --max-new-tokens 1000 \
+  --batch-size 1 \
+  --max-memory-per-gpu 80 \
+  --closedbook 
+
+
