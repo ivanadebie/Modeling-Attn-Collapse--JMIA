@@ -12,14 +12,14 @@ Requires-Dist: tqdm
 Requires-Dist: xopen
 Requires-Dist: pydantic
 Requires-Dist: pytest
-Requires-Dist: longchat@ git+https://github.com/DachengLi1/LongChat.git@43d71f03d7711a2ab3b78ee8d1e38b65bb7fd22f
+Requires-Dist: longchat @ git+https://github.com/DachengLi1/LongChat.git@43d71f03d7711a2ab3b78ee8d1e38b65bb7fd22f
 Requires-Dist: transformers==4.39.1
 Requires-Dist: torch
 Requires-Dist: torchvision
 Requires-Dist: torchaudio
 Requires-Dist: einops
 Requires-Dist: flash-attn==1.0.5
-Requires-Dist: triton-pre-mlir@ git+https://github.com/vchiley/triton.git@triton_pre_mlir#subdirectory=python
+Requires-Dist: triton-pre-mlir @ git+https://github.com/vchiley/triton.git@triton_pre_mlir#subdirectory=python
 Requires-Dist: accelerate
 Requires-Dist: vllm==0.4.0
 Requires-Dist: xformers==0.0.23.post1
@@ -229,7 +229,7 @@ python -u ./scripts/get_qa_responses_from_longchat.py \
   --input-path qa_data/domain1_data_nq_closed_book_8000_converted.jsonl \
   --model lmsys/longchat-13b-16k \
   --output-path qa_predictions/domain1_data_nq_closed_book_8000_converted.output.jsonl.gz \
-  --num-gpus 1 \
+  --num-gpus 2 \
   --max-new-tokens 1000 \
   --batch-size 4 \
   --max-memory-per-gpu 26 \
@@ -252,6 +252,27 @@ python -u ./scripts/get_qa_responses_from_longchat_ori.py \
   --output-path qa_predictions/domain2_data_hotpot_citation_8000_converted.output.jsonl.gz \
   --num-gpus 2 \
   --max-new-tokens 1000 \
-  --batch-size 8 \
-  --max-memory-per-gpu 26 \
+  --batch-size 4 \
+  --max-memory-per-gpu 50 \
+  --closedbook  
+
+
+python -u ./scripts/get_qa_responses_from_longchat_ori.py \
+  --input-path qa_data/domain3_data_novelhop_multihop_8000_converted.jsonl \
+  --model lmsys/longchat-13b-16k \
+  --output-path qa_predictions/domain3_data_novelhop_multihop_8000_converted.output.jsonl.gz \
+  --num-gpus 2 \
+  --max-new-tokens 1000 \
+  --batch-size 4 \
+  --max-memory-per-gpu 50 \
+  --closedbook  
+
+python -u ./scripts/get_qa_responses_from_longchat_ori.py \
+  --input-path qa_data/domain4_data_temporal_recency_8000_converted.jsonl \
+  --model lmsys/longchat-13b-16k \
+  --output-path qa_predictions/domain4_data_temporal_recency_8000_converted.output.jsonl.gz \
+  --num-gpus 2 \
+  --max-new-tokens 1000 \
+  --batch-size 4 \
+  --max-memory-per-gpu 50 \
   --closedbook
