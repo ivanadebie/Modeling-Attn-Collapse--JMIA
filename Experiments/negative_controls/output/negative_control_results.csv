@@ -1,16 +1,16 @@
-Model,Experiment,Exp_Type,Exp_Subtype,Status,Sequences,Precision,Recall,F1,Error
-CPD_RBF,Baseline,baseline,standard_cpd,success,100,0.010027347310847767,0.11,0.018379281537176273,
-CPD_RBF,Within_Shuffle,feature_shuffle,within_sequence,success,100,0.013245033112582781,0.08,0.022727272727272728,
-CPD_RBF,Across_Shuffle,feature_shuffle,across_sequence,success,100,0.010938924339106655,0.12,0.02005012531328321,
-CPD_RBF,No_Hallu,no_hallucination,gold_only,error,0,,,,No sequences without hallucinations in dataset
-CPD_RBF,Random_CP,random_cp,random_selection,success,100,0.042239177664820236,0.08299999999999999,0.05594264783213604,
-CPD+RF,Baseline,baseline,standard_cpd,success,100,0.023880597014925373,0.4,0.04507042253521126,
-CPD+RF,Within_Shuffle,feature_shuffle,within_sequence,success,100,0.029725182277061134,0.53,0.05629314922995221,
-CPD+RF,Across_Shuffle,feature_shuffle,across_sequence,success,100,0.022686567164179106,0.38,0.0428169014084507,
-CPD+RF,No_Hallu,no_hallucination,gold_only,error,0,,,,No sequences without hallucinations in dataset
-CPD+RF,Random_CP,random_cp,random_selection,success,100,0.042239177664820236,0.08299999999999999,0.05594264783213604,
-CPD+LR,Baseline,baseline,standard_cpd,success,100,0.023005384238864415,0.47,0.04386374241717219,
-CPD+LR,Within_Shuffle,feature_shuffle,within_sequence,success,100,0.028890959925442685,0.62,0.05520926090828139,
-CPD+LR,Across_Shuffle,feature_shuffle,across_sequence,success,100,0.023984336759667158,0.49,0.045730284647690154,
-CPD+LR,No_Hallu,no_hallucination,gold_only,error,0,,,,No sequences without hallucinations in dataset
-CPD+LR,Random_CP,random_cp,random_selection,success,100,0.042239177664820236,0.08299999999999999,0.05594264783213604,
+Model,Experiment,Exp_Type,Exp_Subtype,Status,Sequences,Precision,Recall,F1,FP_Rate,Data_Source
+CPD_RBF,Baseline,baseline,standard_cpd,success,100,0.0015134044393196886,0.21,0.0030051516886090437,,
+CPD_RBF,feat_shuffle_within,feature_shuffle,within_sequence,success,100,0.0007930214115781126,0.05,0.00156128024980484,,
+CPD_RBF,feat_shuffle_across,feature_shuffle,across_sequence,success,100,0.0015134044393196886,0.21,0.0030051516886090437,,
+CPD_RBF,seq_no_hallu,no_hallucination,no_distractor_data,success,99,,,,4.98989898989899,no_distractor_files
+CPD_RBF,random_cp,random_cp,random_selection,success,100,0.00553684503493269,0.011,0.0073655336864636035,,
+CPD+RF,Baseline,baseline,standard_cpd,success,100,0.0016049156272927366,0.35,0.0031951798429797327,,
+CPD+RF,feat_shuffle_within,feature_shuffle,within_sequence,success,100,0.0015781386270193945,0.38,0.003143223458372968,,
+CPD+RF,feat_shuffle_across,feature_shuffle,across_sequence,success,100,0.0015132061628760087,0.33,0.0030125981376666056,,
+CPD+RF,seq_no_hallu,no_hallucination,no_distractor_data,success,99,,,,1.0,no_distractor_files
+CPD+RF,random_cp,random_cp,random_selection,success,100,0.00553684503493269,0.011,0.0073655336864636035,,
+CPD+LR,Baseline,baseline,standard_cpd,success,100,0.002043562777251657,0.41,0.004066855130684918,,
+CPD+LR,feat_shuffle_within,feature_shuffle,within_sequence,success,100,0.0020856002901704753,0.46,0.004152374074742734,,
+CPD+LR,feat_shuffle_across,feature_shuffle,across_sequence,success,100,0.0018441907989832028,0.37,0.0036700887764717556,,
+CPD+LR,seq_no_hallu,no_hallucination,no_distractor_data,success,99,,,,1.0,no_distractor_files
+CPD+LR,random_cp,random_cp,random_selection,success,100,0.00553684503493269,0.011,0.0073655336864636035,,

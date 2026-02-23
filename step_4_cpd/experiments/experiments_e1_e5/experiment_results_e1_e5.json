@@ -1,0 +1,90 @@
+[
+  {
+    "exp_id": "E1_pen0.1",
+    "feature_set": "evidence_pos + interference_score",
+    "cpd_method": "PELT(pen=0.1)",
+    "precision": 0.020942408376963352,
+    "recall": 0.96,
+    "f1": 0.04099060631938514,
+    "tp": 24,
+    "fp": 1122,
+    "sequences": 50
+  },
+  {
+    "exp_id": "E1_pen0.25",
+    "feature_set": "evidence_pos + interference_score",
+    "cpd_method": "PELT(pen=0.25)",
+    "precision": 0.021442495126705652,
+    "recall": 0.9565217391304348,
+    "f1": 0.04194470924690181,
+    "tp": 22,
+    "fp": 1004,
+    "sequences": 50
+  },
+  {
+    "exp_id": "E1_pen0.5",
+    "feature_set": "evidence_pos + interference_score",
+    "cpd_method": "PELT(pen=0.5)",
+    "precision": 0.022050716648291068,
+    "recall": 0.9523809523809523,
+    "f1": 0.043103448275862065,
+    "tp": 20,
+    "fp": 887,
+    "sequences": 50
+  },
+  {
+    "exp_id": "E2",
+    "feature_set": "\u0394 avg_attn_entropy + gold_attn_drop + \u0394 distractor_max",
+    "cpd_method": "PELT(pen=1.0)",
+    "precision": 0.026194144838212634,
+    "recall": 0.9444444444444444,
+    "f1": 0.050974512743628186,
+    "tp": 17,
+    "fp": 632,
+    "sequences": 50
+  },
+  {
+    "exp_id": "E2.5",
+    "feature_set": "entropy_variance + attn_reallocation_rate",
+    "cpd_method": "PELT(pen=1.0)",
+    "precision": 0,
+    "recall": 0,
+    "f1": 0,
+    "tp": 0,
+    "fp": 0,
+    "sequences": 50
+  },
+  {
+    "exp_id": "E3_l1",
+    "feature_set": "evidence_pos + interference_score",
+    "cpd_method": "PELT(l1)",
+    "precision": 0.029259896729776247,
+    "recall": 0.9444444444444444,
+    "f1": 0.056761268781302165,
+    "tp": 17,
+    "fp": 564,
+    "sequences": 50
+  },
+  {
+    "exp_id": "E3_huber",
+    "feature_set": "evidence_pos + interference_score",
+    "cpd_method": "PELT(huber)",
+    "precision": 0,
+    "recall": 0,
+    "f1": 0,
+    "tp": 0,
+    "fp": 0,
+    "sequences": 50
+  },
+  {
+    "exp_id": "E3.5_gaussian",
+    "feature_set": "evidence_pos + interference_score",
+    "cpd_method": "PELT(l2/Gaussian)",
+    "precision": 0.024390243902439025,
+    "recall": 0.9444444444444444,
+    "f1": 0.04755244755244755,
+    "tp": 17,
+    "fp": 680,
+    "sequences": 50
+  }
+]

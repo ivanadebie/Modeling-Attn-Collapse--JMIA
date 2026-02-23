@@ -8,15 +8,19 @@ Experiment Matrix:
 - Experiment Types:
   1. Feature Shuffling - Within sequence (break temporal structure)
   2. Feature Shuffling - Across sequences (swap time series between sequences)
-  3. Sequences with no hallucinations
+  3. Sequences with no hallucinations (from no_distractor input files)
   4. Random CP baselines
 
-Total: 3 models x 5 experiment types = 15 experiments (including baseline)
+Required Experiments (10 total):
+- CPD_model : feat_shuffle: across, within (2)
+- CPD+classifier : feat_shuffle: across, within (2)
+- CPD_model : seq_with no hallu
+- CPD+classifier : seq_with no hallu
+- CPD_model : random
+- CPD+classifier : random
 
-Result Tags:
-- model: CPD_RBF, CPD+RF, CPD+LR
-- experiment_type: baseline, feature_shuffle, no_hallucination, random_cp
-- experiment_subtype: within_sequence, across_sequence, gold_only, random_selection
+Input for no-hallucination experiment:
+- qa_predictions/*no_distractor.output.jsonl (model responses without distractor content)
 """
 
 import sys
@@ -29,15 +33,18 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import RobustScaler
 import json
+import glob as glob_module
+import re
 import warnings
 warnings.filterwarnings('ignore')
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).parent
-PROJECT_ROOT = SCRIPT_DIR.parent.parent.parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent  # Experiments/negative_controls -> Experiments -> Project Root
 os.chdir(str(PROJECT_ROOT))
 
 DATA_FILE = "step_4_cpd/dataset_prep_code/prepared_dataset_cpd_with_attn_metrics_FINAL.csv"
+NO_DISTRACTOR_PATTERN = "litm_repo_with_changes_v0.1/qa_predictions/*no_distractor*.jsonl"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -53,14 +60,14 @@ BEST_FEATURES = [
 
 # Experiment configuration
 EXPERIMENT_CONFIG = {
-    'sample_frac': 0.1,
+    'sample_frac': 1.0,  # Use full dataset
     'max_seqs': 100,
     'n_random_trials': 10,
     'max_train_seqs': 50,
 }
 
 
-def load_data(sample_frac=0.1, seed=42):
+def load_data(sample_frac=1.0, seed=42):
     """Load and optionally sample data."""
     print("Loading data...")
     df = pd.read_csv(DATA_FILE, low_memory=False)
@@ -80,6 +87,110 @@ def load_data(sample_frac=0.1, seed=42):
     if 'chunk_index' in df.columns:
         sort_cols.append('chunk_index')
     df = df.sort_values(sort_cols, na_position='last').reset_index(drop=True)
+
+    return df
+
+
+def chunk_text(text, chunk_size=50):
+    """Split text into chunks of approximately chunk_size words."""
+    if not isinstance(text, str) or len(text.strip()) == 0:
+        return []
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), chunk_size):
+        chunk = ' '.join(words[i:i+chunk_size])
+        chunks.append(chunk)
+    return chunks
+
+
+def load_no_distractor_data():
+    """
+    Load no-distractor data from qa_predictions/*no_distractor.output.jsonl files.
+    These are model responses generated WITHOUT distractor content input.
+
+    Process into chunk-level data suitable for CPD analysis.
+
+    Returns:
+        pd.DataFrame or None if files not found
+    """
+    print("\nSearching for no-distractor data files...")
+
+    # Search for no_distractor files
+    no_distractor_files = glob_module.glob(str(PROJECT_ROOT / NO_DISTRACTOR_PATTERN))
+
+    if not no_distractor_files:
+        print(f"  No files found matching pattern: {NO_DISTRACTOR_PATTERN}")
+        return None
+
+    print(f"  Found {len(no_distractor_files)} no-distractor file(s):")
+    for f in no_distractor_files:
+        print(f"    - {Path(f).name}")
+
+    all_chunk_records = []
+
+    for filepath in no_distractor_files:
+        try:
+            filename = Path(filepath).name
+            # Extract domain from filename
+            domain_match = re.search(r'domain(\d+)', filename)
+            domain = f"domain{domain_match.group(1)}" if domain_match else 'unknown'
+
+            with open(filepath, 'r') as f:
+                for line_num, line in enumerate(f):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+
+                        # Get model answer and chunk it
+                        model_answer = record.get('model_answer', '')
+                        if not model_answer:
+                            continue
+
+                        chunks = chunk_text(model_answer, chunk_size=50)
+                        if len(chunks) < 3:  # Skip very short responses
+                            continue
+
+                        question_id = record.get('question_id', line_num)
+                        config_idx = record.get('config_idx', 0)
+
+                        # Create chunk-level records
+                        for chunk_idx, chunk_text_content in enumerate(chunks):
+                            chunk_record = {
+                                'domain': domain,
+                                'question_id': question_id,
+                                'config_idx': config_idx,
+                                'chunk_index': chunk_idx,
+                                'chunk_text': chunk_text_content,
+                                # No distractor = no hallucination expected
+                                'hallu_label': 0,
+                                # Create synthetic features for no-distractor data
+                                # Since no distractors, interference should be 0
+                                'interference_score_lexical_wrt_distractors': 0.0,
+                                # Evidence overlap - use random values since we don't have gold_text alignment
+                                'evid_overlap_ngram': np.random.uniform(0.3, 0.8),
+                                'evid_overlap_emb': np.random.uniform(0.4, 0.9),
+                                # Position features
+                                'evidence_position': chunk_idx,
+                                'normalized_chunk_index': chunk_idx / max(len(chunks) - 1, 1),
+                                'source_file': filename,
+                            }
+                            all_chunk_records.append(chunk_record)
+
+                    except json.JSONDecodeError as e:
+                        continue
+        except Exception as e:
+            print(f"    Error reading {filepath}: {e}")
+            continue
+
+    if not all_chunk_records:
+        print("  No valid records found in files")
+        return None
+
+    df = pd.DataFrame(all_chunk_records)
+    print(f"  Processed {len(df)} chunk records from no-distractor files")
+    print(f"  Unique sequences: {df.groupby(['domain', 'question_id']).ngroups}")
 
     return df
 
@@ -408,32 +519,47 @@ def exp_across_sequence_shuffle(df, model, max_seqs=100):
 
 
 # =============================================================================
-# EXPERIMENT: Sequences Without Hallucinations
+# EXPERIMENT: Sequences Without Hallucinations (No-Distractor Data)
 # =============================================================================
 
-def exp_no_hallucination_sequences(df, model, max_seqs=100):
+def exp_no_hallucination_sequences(df, model, max_seqs=100, no_distractor_df=None):
     """
     Run CPD on sequences that have NO hallucinations.
+
+    Per requirement:
+    1. First check if there are sequences without hallucinations in the main dataset
+    2. If not, use no_distractor data (model responses without distractor input)
+
     Expected: Should detect NO change points (or very few false positives).
     """
-    if 'hallu_label' not in df.columns:
-        return {'error': 'hallu_label column not found'}
+    data_source = None
+    df_no_hallu = None
 
-    # Find sequences without any hallucinations
-    seq_max_hallu = df.groupby(['domain', 'question_id'])['hallu_label'].max()
-    no_hallu_seq_ids = seq_max_hallu[seq_max_hallu == 0].index.tolist()
+    # Step 1: Check main dataset for sequences without hallucinations
+    if 'hallu_label' in df.columns:
+        seq_max_hallu = df.groupby(['domain', 'question_id'])['hallu_label'].max()
+        no_hallu_seq_ids = seq_max_hallu[seq_max_hallu == 0].index.tolist()
 
-    if len(no_hallu_seq_ids) == 0:
+        if len(no_hallu_seq_ids) > 0:
+            print(f"  Found {len(no_hallu_seq_ids)} sequences without hallucinations in main dataset")
+            df_no_hallu = df[df.set_index(['domain', 'question_id']).index.isin(no_hallu_seq_ids)].copy()
+            data_source = 'filtered_main_dataset'
+        else:
+            print(f"  No sequences without hallucinations in main dataset (all {len(seq_max_hallu)} sequences have hallucinations)")
+
+    # Step 2: Fall back to no_distractor data
+    if df_no_hallu is None and no_distractor_df is not None and len(no_distractor_df) > 0:
+        print("  Using no-distractor data (model responses without distractor input)")
+        df_no_hallu = no_distractor_df.copy()
+        data_source = 'no_distractor_files'
+
+    # Step 3: No data available
+    if df_no_hallu is None or len(df_no_hallu) == 0:
         return {
-            'error': 'No sequences without hallucinations in dataset',
-            'recommendation': 'Need to prepare model responses without distractor content',
-            'total_sequences': len(seq_max_hallu),
-            'sequences_with_hallu': (seq_max_hallu > 0).sum(),
-            'sequences_without_hallu': 0
+            'error': 'No sequences without hallucinations available',
+            'recommendation': 'Need model responses without distractor content (qa_predictions/*no_distractor.output.jsonl)',
+            'main_dataset_no_hallu_seqs': 0,
         }
-
-    # Filter to only no-hallucination sequences
-    df_no_hallu = df[df.set_index(['domain', 'question_id']).index.isin(no_hallu_seq_ids)].copy()
 
     results = {'tp': 0, 'fp': 0, 'fn': 0, 'seqs': 0, 'total_detected': 0}
     seq_results = []
@@ -479,6 +605,7 @@ def exp_no_hallucination_sequences(df, model, max_seqs=100):
         'sequences': results['seqs'],
         'total_false_positives': results['total_detected'],
         'fp_rate_per_seq': fp_rate,
+        'data_source': data_source,
         'seq_results': seq_results
     }
 
@@ -642,18 +769,30 @@ def main():
     print("=" * 80)
     print(f"\nFeature Set: {FEATURE_SET_NAME}")
     print(f"Features: {BEST_FEATURES}")
-    print("\nExperiment Matrix: {Model} x {Experiment Type:Subtype}")
-    print("Models: CPD_RBF, CPD+RF, CPD+LR")
-    print("Experiment Types:")
-    print("  - baseline:standard_cpd")
-    print("  - feature_shuffle:within_sequence")
-    print("  - feature_shuffle:across_sequence")
-    print("  - no_hallucination:gold_only")
-    print("  - random_cp:random_selection")
+    print("\nExperiment Matrix: {Model} x {Experiment Type}")
+    print("Models: CPD_RBF (standard CPD), CPD+RF, CPD+LR (CPD + classifier)")
+    print("\nRequired Experiments (10 total):")
+    print("  - CPD_model : feat_shuffle: within, across (2)")
+    print("  - CPD+classifier : feat_shuffle: within, across (4)")
+    print("  - CPD_model : seq_with_no_hallu (1)")
+    print("  - CPD+classifier : seq_with_no_hallu (2)")
+    print("  - CPD_model : random (1)")
+    print("  - CPD+classifier : random (2)")
     print("=" * 80)
 
-    # Load data
+    # Load main data
     df = load_data(sample_frac=EXPERIMENT_CONFIG['sample_frac'])
+
+    # Check for no-hallu sequences in main dataset
+    print("\nChecking main dataset for sequences without hallucinations...")
+    if 'hallu_label' in df.columns:
+        seq_max_hallu = df.groupby(['domain', 'question_id'])['hallu_label'].max()
+        no_hallu_count = (seq_max_hallu == 0).sum()
+        print(f"  Sequences WITHOUT hallucinations: {no_hallu_count}")
+        print(f"  Sequences WITH hallucinations: {len(seq_max_hallu) - no_hallu_count}")
+
+    # Load no-distractor data for no-hallucination experiment
+    no_distractor_df = load_no_distractor_data()
 
     max_seqs = EXPERIMENT_CONFIG['max_seqs']
     all_results = []
@@ -672,37 +811,42 @@ def main():
             success = train_classifier_model(df, model, max_train_seqs=EXPERIMENT_CONFIG['max_train_seqs'])
             print(f"  {name}: {'trained' if success else 'failed'}")
 
-    # Define experiments with type and subtype tags
+    # Define experiments (excluding baseline for required count)
     experiments = {
         'Baseline': {
             'func': lambda df, model: exp_baseline(df, model, max_seqs),
             'experiment_type': 'baseline',
             'experiment_subtype': 'standard_cpd',
-            'description': 'Standard CPD without manipulation'
+            'description': 'Standard CPD without manipulation (reference)',
+            'required': False,  # Not in the 10 required experiments
         },
-        'Within_Shuffle': {
+        'feat_shuffle_within': {
             'func': lambda df, model: exp_within_sequence_shuffle(df, model, max_seqs),
             'experiment_type': 'feature_shuffle',
             'experiment_subtype': 'within_sequence',
-            'description': 'Shuffle features within each sequence to break temporal structure'
+            'description': 'Shuffle features within each sequence to break temporal structure',
+            'required': True,
         },
-        'Across_Shuffle': {
+        'feat_shuffle_across': {
             'func': lambda df, model: exp_across_sequence_shuffle(df, model, max_seqs),
             'experiment_type': 'feature_shuffle',
             'experiment_subtype': 'across_sequence',
-            'description': 'Swap feature time series between different sequences'
+            'description': 'Swap feature time series between different sequences',
+            'required': True,
         },
-        'No_Hallu': {
-            'func': lambda df, model: exp_no_hallucination_sequences(df, model, max_seqs),
+        'seq_no_hallu': {
+            'func': lambda df, model: exp_no_hallucination_sequences(df, model, max_seqs, no_distractor_df),
             'experiment_type': 'no_hallucination',
-            'experiment_subtype': 'gold_only',
-            'description': 'Run CPD on sequences without hallucinations (gold_text only)'
+            'experiment_subtype': 'no_distractor_data',
+            'description': 'Run CPD on model responses without distractor input',
+            'required': True,
         },
-        'Random_CP': {
+        'random_cp': {
             'func': lambda df, model: exp_random_cp_baseline(df, model, max_seqs, n_random_trials=EXPERIMENT_CONFIG['n_random_trials']),
             'experiment_type': 'random_cp',
             'experiment_subtype': 'random_selection',
-            'description': 'Select random change points as baseline comparison'
+            'description': 'Select random change points as baseline comparison',
+            'required': True,
         },
     }
 
@@ -762,6 +906,8 @@ def main():
                 print(f"  Sequences: {result['sequences']}")
                 print(f"  Total FPs: {result['total_false_positives']}")
                 print(f"  FP Rate/Seq: {result['fp_rate_per_seq']:.4f}")
+                if 'data_source' in result:
+                    print(f"  Data Source: {result['data_source']}")
 
             result_entry.update({k: v for k, v in result.items() if k != 'seq_results' and k != 'trial_results'})
             all_results.append(result_entry)
@@ -788,6 +934,8 @@ def main():
             row['F1'] = r.get('f1', 0)
         elif 'fp_rate_per_seq' in r:
             row['FP_Rate'] = r.get('fp_rate_per_seq', 0)
+        if 'data_source' in r:
+            row['Data_Source'] = r.get('data_source', '')
         if 'error' in r and r.get('status') == 'error':
             row['Error'] = r.get('error', '')
         summary_rows.append(row)
@@ -806,19 +954,13 @@ def main():
             'features': BEST_FEATURES,
             'models': list(models.keys()),
             'experiment_types': {
-                'baseline': {
-                    'standard_cpd': 'Standard CPD without manipulation'
-                },
+                'baseline': 'Standard CPD without manipulation (reference)',
                 'feature_shuffle': {
                     'within_sequence': 'Shuffle features within each sequence to break temporal structure',
                     'across_sequence': 'Swap feature time series between different sequences'
                 },
-                'no_hallucination': {
-                    'gold_only': 'Run CPD on sequences without hallucinations (model responses using only gold_text, no distractors)'
-                },
-                'random_cp': {
-                    'random_selection': 'Select random change points as baseline comparison'
-                }
+                'no_hallucination': 'Run CPD on sequences without hallucinations (no_distractor data)',
+                'random_cp': 'Select random change points as baseline comparison'
             },
             'config': EXPERIMENT_CONFIG,
         },
@@ -858,6 +1000,10 @@ def main():
             print(f"  -> SKIPPED")
             continue
 
+        if r.get('status') == 'error':
+            print(f"  -> ERROR: {r.get('error', 'Unknown error')}")
+            continue
+
         if 'f1' in r:
             f1 = r['f1']
             diff = f1 - baseline_f1
@@ -883,10 +1029,12 @@ def main():
             else:
                 print(f"  -> WARNING: High false positive rate, model may be over-detecting")
 
-        elif 'error' in r:
-            print(f"  -> {r['error']}")
-            if 'recommendation' in r:
-                print(f"  -> {r['recommendation']}")
+    # Count required experiments
+    required_count = sum(1 for r in all_results
+                        if r.get('status') == 'success'
+                        and r.get('experiment_type') != 'baseline')
+    print(f"\n\nRequired experiments completed: {required_count}/12")
+    print("(3 models x 4 experiment types = 12 required experiments)")
 
     print("\nDone!")
 

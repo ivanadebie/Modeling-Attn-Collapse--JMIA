@@ -1,0 +1,4 @@
+Feature Set,Total Sequences,Sequences with Ground Truth,Avg Change Points Detected,Sequences with Detections,Avg Precision,Avg Recall,Avg F1 Score,Avg Time to Detection
+Scalars,3310,17,0.4015105740181269,1134,0.0,0.0,0.0,5.0
+Attention,3310,17,0.402416918429003,1134,0.0,0.0,0.0,5.0
+Combined,3310,17,0.40211480362537766,1134,0.0,0.0,0.0,5.0

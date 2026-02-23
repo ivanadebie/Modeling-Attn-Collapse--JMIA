@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find . -name *.csv -exec sh -c \"head -1 \"\"$1\"\" | grep -qv \"\"version https://git-lfs\"\" && echo \"\"$1\"\"\" _ {})",
+      "Bash(brew install:*)",
+      "Bash(git lfs install:*)",
+      "Bash(git lfs pull:*)",
+      "Bash(git lfs ls-files:*)",
+      "Bash(git lfs status:*)",
+      "Bash(git lfs fetch:*)",
+      "Bash(git lfs checkout:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(python:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(xargs ls:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}
