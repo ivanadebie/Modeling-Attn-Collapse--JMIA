@@ -43,7 +43,7 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent  # Experiments/negative_controls -> Experiments -> Project Root
 os.chdir(str(PROJECT_ROOT))
 
-DATA_FILE = "step_4_cpd/dataset_prep_code/prepared_dataset_cpd_with_attn_metrics_FINAL.csv"
+DATA_FILE = "step_4_cpd/dataset_prep_code/prepared_dataset_cpd_with_attn_metrics_FINAL.csv.gz"
 NO_DISTRACTOR_PATTERN = "litm_repo_with_changes_v0.1/qa_predictions/*no_distractor*.jsonl"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -561,7 +561,7 @@ def exp_no_hallucination_sequences(df, model, max_seqs=100, no_distractor_df=Non
             'main_dataset_no_hallu_seqs': 0,
         }
 
-    results = {'tp': 0, 'fp': 0, 'fn': 0, 'seqs': 0, 'total_detected': 0}
+    results = {'tp': 0, 'fp': 0, 'fn': 0, 'tn': 0, 'seqs': 0, 'total_detected': 0}
     seq_results = []
 
     groups = get_sequences(df_no_hallu, max_seqs)
@@ -589,22 +589,53 @@ def exp_no_hallucination_sequences(df, model, max_seqs=100, no_distractor_df=Non
             results['fp'] += len(detected_cps)
             results['total_detected'] += len(detected_cps)
 
+            # Sequence-level metrics:
+            # TN = sequence with no detection (correct behavior for no-hallu)
+            # FP_seq = sequence with at least one detection (incorrect)
+            if len(detected_cps) == 0:
+                results['tn'] += 1  # Correctly detected nothing
+            # Note: FP at sequence level is implicitly (seqs - tn)
+
             seq_results.append({
                 'seq_id': str(seq_id),
                 'true_cp': None,
                 'detected_cps': detected_cps,
-                'num_false_positives': len(detected_cps)
+                'num_false_positives': len(detected_cps),
+                'correct_no_detection': len(detected_cps) == 0
             })
         except Exception as e:
             pass
 
-    # Compute false positive rate
+    # Compute metrics
     fp_rate = results['total_detected'] / results['seqs'] if results['seqs'] > 0 else 0
+
+    # Sequence-level precision/recall for no-hallucination detection:
+    # - True Negative (TN): No detection on no-hallu sequence (correct)
+    # - False Positive (FP_seq): Detection on no-hallu sequence (incorrect)
+    # Since all sequences are no-hallu (negative class), we measure:
+    # - Specificity (TNR) = TN / (TN + FP_seq) = proportion correctly identified as no-hallu
+    # - For this single-class scenario, we define:
+    #   - Precision: TN / total_seqs (proportion of sequences with correct "no detection")
+    #   - Recall: Same as precision here (all seqs are no-hallu, so recall = how many we correctly abstained)
+    tn = results['tn']
+    fp_seq = results['seqs'] - tn  # Sequences with at least one false detection
+
+    # Precision: Of all sequences, how many did we correctly not detect on?
+    precision = tn / results['seqs'] if results['seqs'] > 0 else 0
+    # Recall: Of all no-hallu sequences (which is all of them), how many did we correctly not detect on?
+    recall = tn / results['seqs'] if results['seqs'] > 0 else 0
+    # F1 score
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
 
     return {
         'sequences': results['seqs'],
         'total_false_positives': results['total_detected'],
         'fp_rate_per_seq': fp_rate,
+        'true_negatives': tn,
+        'false_positive_seqs': fp_seq,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1,
         'data_source': data_source,
         'seq_results': seq_results
     }
@@ -895,19 +926,25 @@ def main():
 
             # Print results
             result_entry['status'] = 'success'
-            if 'f1' in result:
+            if 'fp_rate_per_seq' in result:
+                # No-hallucination experiment - show both FP rate and precision/recall
+                print(f"  Sequences: {result['sequences']}")
+                print(f"  Total FPs: {result['total_false_positives']}")
+                print(f"  FP Rate/Seq: {result['fp_rate_per_seq']:.4f}")
+                print(f"  True Negatives: {result.get('true_negatives', 'N/A')}")
+                print(f"  FP Sequences: {result.get('false_positive_seqs', 'N/A')}")
+                print(f"  Precision: {result['precision']:.4f}")
+                print(f"  Recall: {result['recall']:.4f}")
+                print(f"  F1: {result['f1']:.4f}")
+                if 'data_source' in result:
+                    print(f"  Data Source: {result['data_source']}")
+            elif 'f1' in result:
                 print(f"  Sequences: {result['sequences']}")
                 print(f"  Precision: {result['precision']:.4f}")
                 print(f"  Recall: {result['recall']:.4f}")
                 print(f"  F1: {result['f1']:.4f}")
                 if 'std_f1' in result:
                     print(f"  F1 Std: {result['std_f1']:.4f}")
-            elif 'fp_rate_per_seq' in result:
-                print(f"  Sequences: {result['sequences']}")
-                print(f"  Total FPs: {result['total_false_positives']}")
-                print(f"  FP Rate/Seq: {result['fp_rate_per_seq']:.4f}")
-                if 'data_source' in result:
-                    print(f"  Data Source: {result['data_source']}")
 
             result_entry.update({k: v for k, v in result.items() if k != 'seq_results' and k != 'trial_results'})
             all_results.append(result_entry)
@@ -928,12 +965,16 @@ def main():
             'Status': r.get('status', ''),
             'Sequences': r.get('sequences', 0),
         }
-        if 'f1' in r:
+        if 'fp_rate_per_seq' in r:
+            # No-hallucination experiment - include all metrics
+            row['FP_Rate'] = r.get('fp_rate_per_seq', 0)
             row['Precision'] = r.get('precision', 0)
             row['Recall'] = r.get('recall', 0)
             row['F1'] = r.get('f1', 0)
-        elif 'fp_rate_per_seq' in r:
-            row['FP_Rate'] = r.get('fp_rate_per_seq', 0)
+        elif 'f1' in r:
+            row['Precision'] = r.get('precision', 0)
+            row['Recall'] = r.get('recall', 0)
+            row['F1'] = r.get('f1', 0)
         if 'data_source' in r:
             row['Data_Source'] = r.get('data_source', '')
         if 'error' in r and r.get('status') == 'error':
@@ -1004,7 +1045,22 @@ def main():
             print(f"  -> ERROR: {r.get('error', 'Unknown error')}")
             continue
 
-        if 'f1' in r:
+        if 'fp_rate_per_seq' in r:
+            # No-hallucination experiment
+            fp_rate = r['fp_rate_per_seq']
+            f1 = r.get('f1', 0)
+            precision = r.get('precision', 0)
+            recall = r.get('recall', 0)
+            print(f"  FP Rate/Seq = {fp_rate:.4f}")
+            print(f"  Precision = {precision:.4f}, Recall = {recall:.4f}, F1 = {f1:.4f}")
+            if f1 > 0.8:
+                print(f"  -> GOOD: High F1 means model correctly abstains from detecting on no-hallu sequences")
+            elif f1 > 0.5:
+                print(f"  -> MODERATE: Model sometimes over-detects on no-hallu sequences")
+            else:
+                print(f"  -> WARNING: Low F1, model frequently produces false positives on clean data")
+
+        elif 'f1' in r:
             f1 = r['f1']
             diff = f1 - baseline_f1
             pct = 100 * diff / baseline_f1 if baseline_f1 > 0 else 0
@@ -1020,14 +1076,6 @@ def main():
                     print(f"  -> GOOD: Random baseline much worse, CPD is meaningful")
                 else:
                     print(f"  -> WARNING: Random baseline competitive, CPD may not add much")
-
-        elif 'fp_rate_per_seq' in r:
-            fp_rate = r['fp_rate_per_seq']
-            print(f"  FP Rate/Seq = {fp_rate:.4f}")
-            if fp_rate < 0.5:
-                print(f"  -> GOOD: Low false positive rate on no-hallu sequences")
-            else:
-                print(f"  -> WARNING: High false positive rate, model may be over-detecting")
 
     # Count required experiments
     required_count = sum(1 for r in all_results
