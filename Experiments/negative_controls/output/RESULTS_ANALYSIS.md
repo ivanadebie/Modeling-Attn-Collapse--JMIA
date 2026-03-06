@@ -2,8 +2,6 @@
 
 ## Overview
 
-This document provides a detailed analysis of the negative control experiment results for the CPD hallucination detection study.
-
 ---
 
 ## Label Definitions
@@ -91,7 +89,7 @@ fp_rate = results['total_detected'] / results['seqs']
 
 **Analysis**:
 - Low precision across all models suggests many false detections
-- Recall shows models DO detect a meaningful portion of true change points
+- Recall shows models detect a meaningful portion of true change points
 - **CPD+LR performs best** with 41% recall
 - The classifier-enhanced models (RF, LR) significantly outperform raw CPD
 
@@ -207,15 +205,6 @@ fp_rate = results['total_detected'] / results['seqs']
 ### 5. CPD Provides Real Signal
 - All models significantly outperform random baseline (19-37x better recall)
 - The detection is not due to chance
-
----
-
-## Recommendations
-
-1. **Use CPD+LR for production**: Best balance of recall and false positive rate
-2. **Avoid CPD_RBF alone**: Too many false positives on clean data
-3. **Consider renaming FP_Rate**: Current metric is misleading; suggest `avg_fp_per_seq` to clarify it's unbounded
-4. **Investigate classifier robustness**: CPD+RF and CPD+LR maintaining performance under shuffling warrants further investigation
 
 ---
 
