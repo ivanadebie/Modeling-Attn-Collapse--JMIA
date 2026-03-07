@@ -8,6 +8,9 @@
   <Header value="Gold Evidence (Ground Truth)"/>
   <Text name="gold_text" value="$gold_text"/>
 
+  <Header value="Full Model Answer"/>
+  <Text name="full_answer" value="$model_answer"/>
+
   <Header value="Sentence Index"/>
   <Text name="chunk_index" value="$chunk_index"/>
 
