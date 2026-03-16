@@ -7,8 +7,10 @@ def fix_question_ids(input_file, output_file):
 
     for task in tasks:
         data = task.get("data", {})
+
         question_id = data.get("question_id")
-        config_id = task.get("project")
+
+        config_id = data.get("config_idx")
 
         annotations = task.get("annotations", [])
 
