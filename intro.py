@@ -1,4 +1,4 @@
-# Opens the Syntehtic QA spreadsheet
+# Opens the Synthetic QA spreadsheet
 import pandas as pd
 
 data = pd.read_excel('SyntheticQA.xlsx')
