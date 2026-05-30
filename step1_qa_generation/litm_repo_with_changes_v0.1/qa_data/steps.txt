@@ -1,0 +1,7 @@
+python json2jsonl.py -i domain1_data_nq_closed_book_8000.jsonl -o domain1_data_nq_closed_book_8000_converted.jsonl
+python json2jsonl.py -i domain2_data_hotpot_citation_8000.jsonl -o domain2_data_hotpot_citation_8000_converted.jsonl
+python json2jsonl.py -i domain3_data_novelhop_multihop_8000.jsonl -o domain3_data_novelhop_multihop_8000_converted.jsonl
+python json2jsonl.py -i domain4_data_temporal_recency_8000.jsonl -o domain4_data_temporal_recency_8000_convertedjsonl
+
+
+

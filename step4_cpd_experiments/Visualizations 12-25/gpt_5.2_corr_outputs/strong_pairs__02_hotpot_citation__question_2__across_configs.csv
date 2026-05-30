@@ -1,0 +1,17 @@
+feature_1,feature_2,n,spearman_rho,abs_rho,p_value,strength,direction
+evidence_overlap_ratio,evid_overlap_emb,20,1.0,1.0,0.0,strong,+
+evidence_overlap_ratio,evidence_overlap_emb,20,1.0,1.0,0.0,strong,+
+evid_overlap_emb,evidence_overlap_emb,20,1.0,1.0,0.0,strong,+
+hallucination_score,chunk_hallu_score,20,-1.0,1.0,0.0,strong,-
+seq_len,dist_len,20,0.9981196644178427,0.9981196644178427,2.771547251175473e-23,strong,+
+interference_score_lexical_wrt_distractors,interference_token_hits,20,0.9604536805702424,0.9604536805702424,1.94605137862439e-11,strong,+
+distractor_density_chunk,dist_len,20,0.9052143903798646,0.9052143903798646,4.140252682270446e-08,strong,+
+distractor_density_chunk,seq_len,20,0.9048740202266848,0.9048740202266848,4.270546203260963e-08,strong,+
+att_avg_entropy,distractor_attention_max,20,0.7954887218045112,0.7954887218045112,2.7534156851806318e-05,strong,+
+total_response_tokens,resp_len,20,0.7787810383747178,0.7787810383747178,5.226114679182488e-05,strong,+
+interference_score_lexical_wrt_distractors,att_avg_entropy,20,0.7669172932330827,0.7669172932330827,7.978155088069932e-05,strong,+
+interference_token_hits,hallucination_score,20,0.7465173313294982,0.7465173313294982,0.00015645856106674574,strong,+
+interference_token_hits,chunk_hallu_score,20,-0.7465173313294982,0.7465173313294982,0.00015645856106674574,strong,-
+interference_score_lexical_wrt_distractors,hallucination_score,20,0.7308270676691728,0.7308270676691728,0.00025215134150965545,strong,+
+interference_score_lexical_wrt_distractors,chunk_hallu_score,20,-0.7308270676691728,0.7308270676691728,0.00025215134150965545,strong,-
+interference_token_hits,att_avg_entropy,20,0.7299447972333841,0.7299447972333841,0.0002587619389040026,strong,+

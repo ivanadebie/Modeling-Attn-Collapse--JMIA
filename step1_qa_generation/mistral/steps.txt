@@ -1,0 +1,27 @@
+curl -LO https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+/bin/bash Miniconda3-latest-Linux-x86_64.sh
+
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+conda create -n myenv python=3.10 -y
+conda activate myenv 
+#pip install "torch==2.8.0" "torchvision==0.23.0" "torchaudio==2.8.0" \
+  --index-url https://download.pytorch.org/whl/cu126
+#pip install transformers accelerate sentencepiece safetensors einops "flash-attn>=2.3.6"
+#pip install vllm
+#pip install "transformers>=4.41.0" accelerate sentencepiece
+
+
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install transformers>=4.41.0 accelerate sentencepiece
+
+#python mistral_exe.py 
+pip install -U pip setuptools wheel
+pip uninstall -y protobuf google || true
+pip install "protobuf>=3.20,<6.0.0" sentencepiece             "transformers>=4.41" "tokenizers>=0.15" accelerate
+
+
+python ./mistral/mistral_process.py \
+    --input-path ./litm_repo_with_changes_v0.1/qa_data/domain1_data_nq_closed_book_8000_converted.jsonl \
+    --output-path ./mistral/output/domain1_data_nq_closed_book_8000_converted.mistral.jsonl \
+    --max-new-tokens 1000

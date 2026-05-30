@@ -1,0 +1,35 @@
+# Basic utilities
+tqdm
+xopen
+pydantic
+pytest
+
+# For running LongChat locally (fixed commit)
+longchat@git+https://github.com/DachengLi1/LongChat.git@43d71f03d7711a2ab3b78ee8d1e38b65bb7fd22f
+
+# Transformers ecosystem for model inference
+transformers==4.39.1
+torch
+torchvision
+torchaudio
+
+# CUDA compatible PyTorch (you should install PyTorch separately with CUDA 12.1 support, see below)
+# Note: pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Utilities for efficient transformer operations
+einops
+flash-attn==1.0.5
+triton-pre-mlir@git+https://github.com/vchiley/triton.git@triton_pre_mlir#subdirectory=python
+accelerate
+
+# For running LLaMA-2 locally and vLLM integration
+vllm==0.4.0
+xformers==0.0.23.post1
+
+# FSChat (for model worker and web-server features)
+fschat[model_worker,web-server]
+
+# Code style and quality
+flake8==5.0.4
+black==22.10.0
+pre-commit

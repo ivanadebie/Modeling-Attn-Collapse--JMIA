@@ -1,0 +1,14 @@
+feature_1,feature_2,n,spearman_rho,abs_rho,p_value,strength,direction
+evidence_overlap_ratio,evid_overlap_emb,20,1.0,1.0,0.0,strong,+
+evidence_overlap_ratio,evidence_overlap_emb,20,1.0,1.0,0.0,strong,+
+evid_overlap_emb,evidence_overlap_emb,20,1.0,1.0,0.0,strong,+
+hallucination_score,chunk_hallu_score,20,-1.0,1.0,0.0,strong,-
+gold_len,cross_attention_mass_to_gold_raw,20,1.0,1.0,0.0,strong,+
+gold_found,gold_available,20,1.0,1.0,0.0,strong,+
+gold_len,gold_found,20,0.9969230769230769,0.9969230769230769,2.321565818738523e-21,strong,+
+gold_len,gold_available,20,0.9969230769230769,0.9969230769230769,2.321565818738523e-21,strong,+
+cross_attention_mass_to_gold_raw,gold_found,20,0.9969230769230769,0.9969230769230769,2.321565818738523e-21,strong,+
+cross_attention_mass_to_gold_raw,gold_available,20,0.9969230769230769,0.9969230769230769,2.321565818738523e-21,strong,+
+seq_len,dist_len,20,0.9338345864661652,0.9338345864661652,1.8126865423587107e-09,strong,+
+hallu_score,hallucination_score,20,0.7729323308270677,0.7729323308270677,6.458024083746024e-05,strong,+
+hallu_score,chunk_hallu_score,20,-0.7729323308270677,0.7729323308270677,6.458024083746024e-05,strong,-

@@ -1,0 +1,383 @@
+{
+  "metadata": {
+    "experiment_name": "Negative Control Experiments for CPD Hallucination Detection",
+    "feature_set": "best_raw_features",
+    "features": [
+      "interference_score_lexical_wrt_distractors",
+      "evid_overlap_ngram",
+      "evid_overlap_emb",
+      "evidence_position",
+      "normalized_chunk_index"
+    ],
+    "models": [
+      "CPD_RBF",
+      "CPD+RF",
+      "CPD+LR"
+    ],
+    "experiment_types": {
+      "baseline": "Standard CPD without manipulation (reference)",
+      "feature_shuffle": {
+        "within_sequence": "Shuffle features within each sequence to break temporal structure",
+        "across_sequence": "Swap feature time series between different sequences"
+      },
+      "no_hallucination": "Run CPD on sequences without hallucinations (no_distractor data)",
+      "random_cp": "Select random change points as baseline comparison"
+    },
+    "config": {
+      "sample_frac": 1.0,
+      "max_seqs": 100,
+      "n_random_trials": 10,
+      "max_train_seqs": 50
+    }
+  },
+  "results": [
+    {
+      "model": "CPD_RBF",
+      "experiment": "Baseline",
+      "experiment_type": "baseline",
+      "experiment_subtype": "standard_cpd",
+      "description": "Standard CPD without manipulation (reference)",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.0015134044393196886,
+      "recall": 0.21,
+      "f1": 0.0030051516886090437,
+      "tp": 21,
+      "fp": 13855,
+      "fn": 79
+    },
+    {
+      "model": "CPD_RBF",
+      "experiment": "feat_shuffle_within",
+      "experiment_type": "feature_shuffle",
+      "experiment_subtype": "within_sequence",
+      "description": "Shuffle features within each sequence to break temporal structure",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.0007930214115781126,
+      "recall": 0.05,
+      "f1": 0.00156128024980484,
+      "tp": 5,
+      "fp": 6300,
+      "fn": 95
+    },
+    {
+      "model": "CPD_RBF",
+      "experiment": "feat_shuffle_across",
+      "experiment_type": "feature_shuffle",
+      "experiment_subtype": "across_sequence",
+      "description": "Swap feature time series between different sequences",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.0015134044393196886,
+      "recall": 0.21,
+      "f1": 0.0030051516886090437,
+      "tp": 21,
+      "fp": 13855,
+      "fn": 79
+    },
+    {
+      "model": "CPD_RBF",
+      "experiment": "seq_no_hallu",
+      "experiment_type": "no_hallucination",
+      "experiment_subtype": "no_distractor_data",
+      "description": "Run CPD on model responses without distractor input",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 99,
+      "total_false_positives": 478,
+      "fp_rate_per_seq": 4.828282828282828,
+      "true_negatives": 0,
+      "false_positive_seqs": 99,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0,
+      "data_source": "no_distractor_files"
+    },
+    {
+      "model": "CPD_RBF",
+      "experiment": "random_cp",
+      "experiment_type": "random_cp",
+      "experiment_subtype": "random_selection",
+      "description": "Select random change points as baseline comparison",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "n_trials": 10,
+      "sequences": 100,
+      "precision": 0.00553684503493269,
+      "recall": 0.011,
+      "f1": 0.0073655336864636035,
+      "std_f1": 0.007640777315191891
+    },
+    {
+      "model": "CPD+RF",
+      "experiment": "Baseline",
+      "experiment_type": "baseline",
+      "experiment_subtype": "standard_cpd",
+      "description": "Standard CPD without manipulation (reference)",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.0016049156272927366,
+      "recall": 0.35,
+      "f1": 0.0031951798429797327,
+      "tp": 35,
+      "fp": 21773,
+      "fn": 65
+    },
+    {
+      "model": "CPD+RF",
+      "experiment": "feat_shuffle_within",
+      "experiment_type": "feature_shuffle",
+      "experiment_subtype": "within_sequence",
+      "description": "Shuffle features within each sequence to break temporal structure",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.0015781386270193945,
+      "recall": 0.38,
+      "f1": 0.003143223458372968,
+      "tp": 38,
+      "fp": 24041,
+      "fn": 62
+    },
+    {
+      "model": "CPD+RF",
+      "experiment": "feat_shuffle_across",
+      "experiment_type": "feature_shuffle",
+      "experiment_subtype": "across_sequence",
+      "description": "Swap feature time series between different sequences",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.0015132061628760087,
+      "recall": 0.33,
+      "f1": 0.0030125981376666056,
+      "tp": 33,
+      "fp": 21775,
+      "fn": 67
+    },
+    {
+      "model": "CPD+RF",
+      "experiment": "seq_no_hallu",
+      "experiment_type": "no_hallucination",
+      "experiment_subtype": "no_distractor_data",
+      "description": "Run CPD on model responses without distractor input",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 99,
+      "total_false_positives": 99,
+      "fp_rate_per_seq": 1.0,
+      "true_negatives": 0,
+      "false_positive_seqs": 99,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0,
+      "data_source": "no_distractor_files"
+    },
+    {
+      "model": "CPD+RF",
+      "experiment": "random_cp",
+      "experiment_type": "random_cp",
+      "experiment_subtype": "random_selection",
+      "description": "Select random change points as baseline comparison",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "n_trials": 10,
+      "sequences": 100,
+      "precision": 0.00553684503493269,
+      "recall": 0.011,
+      "f1": 0.0073655336864636035,
+      "std_f1": 0.007640777315191891
+    },
+    {
+      "model": "CPD+LR",
+      "experiment": "Baseline",
+      "experiment_type": "baseline",
+      "experiment_subtype": "standard_cpd",
+      "description": "Standard CPD without manipulation (reference)",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.002043562777251657,
+      "recall": 0.41,
+      "f1": 0.004066855130684918,
+      "tp": 41,
+      "fp": 20022,
+      "fn": 59
+    },
+    {
+      "model": "CPD+LR",
+      "experiment": "feat_shuffle_within",
+      "experiment_type": "feature_shuffle",
+      "experiment_subtype": "within_sequence",
+      "description": "Shuffle features within each sequence to break temporal structure",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.0020856002901704753,
+      "recall": 0.46,
+      "f1": 0.004152374074742734,
+      "tp": 46,
+      "fp": 22010,
+      "fn": 54
+    },
+    {
+      "model": "CPD+LR",
+      "experiment": "feat_shuffle_across",
+      "experiment_type": "feature_shuffle",
+      "experiment_subtype": "across_sequence",
+      "description": "Swap feature time series between different sequences",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 100,
+      "precision": 0.0018441907989832028,
+      "recall": 0.37,
+      "f1": 0.0036700887764717556,
+      "tp": 37,
+      "fp": 20026,
+      "fn": 63
+    },
+    {
+      "model": "CPD+LR",
+      "experiment": "seq_no_hallu",
+      "experiment_type": "no_hallucination",
+      "experiment_subtype": "no_distractor_data",
+      "description": "Run CPD on model responses without distractor input",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "sequences": 99,
+      "total_false_positives": 99,
+      "fp_rate_per_seq": 1.0,
+      "true_negatives": 0,
+      "false_positive_seqs": 99,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0,
+      "data_source": "no_distractor_files"
+    },
+    {
+      "model": "CPD+LR",
+      "experiment": "random_cp",
+      "experiment_type": "random_cp",
+      "experiment_subtype": "random_selection",
+      "description": "Select random change points as baseline comparison",
+      "feature_set": "best_raw_features",
+      "features_used": [
+        "interference_score_lexical_wrt_distractors",
+        "evid_overlap_ngram",
+        "evid_overlap_emb",
+        "evidence_position",
+        "normalized_chunk_index"
+      ],
+      "status": "success",
+      "n_trials": 10,
+      "sequences": 100,
+      "precision": 0.00553684503493269,
+      "recall": 0.011,
+      "f1": 0.0073655336864636035,
+      "std_f1": 0.007640777315191891
+    }
+  ]
+}
