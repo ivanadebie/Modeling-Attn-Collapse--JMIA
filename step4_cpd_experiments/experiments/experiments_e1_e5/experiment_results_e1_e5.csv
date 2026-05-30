@@ -1,0 +1,11 @@
+exp_id,feature_set,cpd_method,precision,recall,f1,tp,fp,sequences
+E1_pen0.1,evidence_pos + interference_score,PELT(pen=0.1),0.0209424083769633,0.96,0.0409906063193851,24,1122,50
+E1_pen0.25,evidence_pos + interference_score,PELT(pen=0.25),0.0214424951267056,0.9565217391304348,0.0419447092469018,22,1004,50
+E1_pen0.5,evidence_pos + interference_score,PELT(pen=0.5),0.022050716648291,0.9523809523809524,0.043103448275862,20,887,50
+E2,Δ avg_attn_entropy + gold_attn_drop + Δ distractor_max,PELT(pen=1.0),0.0261941448382126,0.9444444444444444,0.0509745127436281,17,632,50
+E2.5,entropy_variance + attn_reallocation_rate,PELT(pen=1.0),0.0,0.0,0.0,0,0,50
+E3_l1,evidence_pos + interference_score,PELT(l1),0.0292598967297762,0.9444444444444444,0.0567612687813021,17,564,50
+E3_huber,evidence_pos + interference_score,PELT(huber),0.0,0.0,0.0,0,0,50
+E3.5_gaussian,evidence_pos + interference_score,PELT(l2/Gaussian),0.024390243902439,0.9444444444444444,0.0475524475524475,17,680,50
+E4,delta_evidence_overlap_ngram + delta_interference_score,PELT(pen=1.0),0.0625,0.9090909090909091,0.11695906432748537,10,150,30
+E5,entropy_cusum + evidence_cusum,PELT(pen=1.0),0.13043478260869565,0.8571428571428571,0.22641509433962262,6,40,30
