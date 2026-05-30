@@ -1,0 +1,64 @@
+<View>
+
+  <Header value="Hallucination Annotation"/>
+
+  <Header value="Question"/>
+  <Text name="question" value="$question"/>
+
+  <Header value="Gold Evidence (Ground Truth)"/>
+  <Text name="gold_text" value="$gold_text"/>
+
+  <Header value="Full Model Answer"/>
+  <Text name="full_answer" value="$model_answer"/>
+
+  <Header value="Sentence Index"/>
+  <Text name="chunk_index" value="$chunk_index"/>
+
+  <Header value="Sentence to Label"/>
+  <Text name="sentence" value="$model_answer_chunk"/>
+
+  <Header value="Sentence Label"/>
+  <Choices name="label" toName="sentence" choice="single-radio" showInline="true">
+    <Choice value="0_clean"/>
+    <Choice value="1_precursor"/>
+    <Choice value="2_onset"/>
+    <Choice value="3_continued"/>
+  </Choices>
+
+  <Header value="Hallucinated Span"/>
+  <TextArea name="hallucinated_spans"
+            toName="sentence"
+            placeholder="Paste hallucinated phrase here"
+            rows="2"/>
+
+  <Header value="Evidence Source"/>
+  <TextArea name="evidence"
+            toName="sentence"
+            placeholder="Paste source URL or write evidence_not_found"
+            rows="2"/>
+
+  <Header value="Completeness Score (0.0–1.0)"/>
+  <Choices name="completeness" toName="sentence" choice="single-radio" showInline="true">
+    <Choice value="1.0"/>
+    <Choice value="0.7"/>
+    <Choice value="0.5"/>
+    <Choice value="0.3"/>
+    <Choice value="0.0"/>
+  </Choices>
+
+  <Header value="Annotator Confidence (1–5)"/>
+  <Choices name="annotator_confidence" toName="sentence" choice="single-radio" showInline="true">
+    <Choice value="1"/>
+    <Choice value="2"/>
+    <Choice value="3"/>
+    <Choice value="4"/>
+    <Choice value="5"/>
+  </Choices>
+
+  <Header value="Notes"/>
+  <TextArea name="notes"
+            toName="sentence"
+            placeholder="Optional comments"
+            rows="2"/>
+
+</View>
